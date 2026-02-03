@@ -1,221 +1,160 @@
 "use client";
-import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { 
+  FaUser, 
+  FaSignOutAlt, 
+  FaTicketAlt, 
+  FaCog 
+} from "react-icons/fa";
 
 export default function Navbar() {
   const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null); // State for the full name
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [profile, setProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const pathname = usePathname();
+
+  if (pathname === "/auth") return null;
 
   useEffect(() => {
-    // Function to fetch the profile from the database
-    const fetchProfile = async (userId: string) => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("id", userId)
-        .single();
-      setProfile(data);
+    fetchUser();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      fetchUser();
+    });
+
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      subscription.unsubscribe();
+      document.removeEventListener("mousedown", handleClickOutside);
     };
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
-      else setProfile(null);
-    });
-
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user);
-      if (data.user) fetchProfile(data.user.id);
-    });
-
-    return () => subscription.unsubscribe();
   }, []);
 
+  async function fetchUser() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .single();
+        setProfile(profile);
+      }
+    } catch (error) {
+      console.error("Error fetching navbar data:", error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setIsDropdownOpen(false);
+    router.push("/auth");
+    setUser(null);
+    setProfile(null);
+  };
+
   return (
-    <nav className="w-full bg-[#1a1a1a] border-b border-[#3b3b3b] px-6 py-4 sticky top-0 z-50">
-      <div className="w-full flex items-center justify-between">
-        {/* LEFT SIDE: LOGO */}
-        <Link href="/" className="flex items-center gap-3 group shrink-0">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-white rounded-lg flex items-center justify-center font-black text-[#1a1a1a] text-xl shadow-[0_0_15px_rgba(59,130,246,0.5)]">
-            ST
-          </div>
-          <span className="text-xl font-bold tracking-tighter text-white uppercase hidden sm:inline">
-            Song <span className="text-blue-500">Tailor</span>
-          </span>
-        </Link>
+    <nav className="sticky top-0 w-full h-16 bg-[#121212] flex items-center justify-between px-6 z-50 border-b border-transparent">
+      
+      {/* LOGO */}
+      <Link href="/" className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent hover:opacity-80 transition-opacity">
+        SONG TAILOR
+      </Link>
 
-        {/* RIGHT SIDE: DESKTOP NAVIGATION */}
-        <div className="hidden md:flex items-center gap-8">
-          {user ? (
-            <>
-              <Link
-                href="/pages/request"
-                className="text-sm font-bold text-gray-300 hover:text-white transition-colors"
+      {/* RIGHT SIDE ACTIONS */}
+      <div className="flex items-center gap-4">
+        
+        {loading ? (
+           <div className="w-8 h-8 rounded-full bg-[#333] animate-pulse"></div>
+        ) : user ? (
+          <>
+            {/* Create Ticket Button */}
+            <Link 
+              href="/pages/request" 
+              className="hidden md:flex items-center gap-2 bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all shadow-lg shadow-yellow-900/20"
+            >
+              Create a Ticket <FaTicketAlt />
+            </Link>
+
+            <div className="h-6 w-px bg-[#333] mx-2 hidden md:block"></div>
+
+            {/* Avatar Dropdown */}
+            <div className="relative" ref={dropdownRef}>
+              <button 
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className={`w-10 h-10 rounded-full bg-[#2a2a2a] border-2 transition-all overflow-hidden flex items-center justify-center ${isDropdownOpen ? 'border-blue-500 ring-2 ring-blue-500/30' : 'border-[#333] hover:border-gray-500'}`}
               >
-                Create a Ticket 🎫
-              </Link>
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <FaUser className="text-gray-400 text-sm" />
+                )}
+              </button>
 
-              <div className="relative">
-                <button
-                  onClick={() => setShowDropdown(!showDropdown)}
-                  className="w-10 h-10 rounded-full bg-[#2b2b2b] border border-[#3b3b3b] flex items-center justify-center hover:border-blue-500 text-xl transition-all"
-                >
-                  👤
-                </button>
+              {isDropdownOpen && (
+                <div className="absolute right-0 top-14 w-60 bg-[#1e1e1e] border border-[#333] rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="p-4 border-b border-[#333] bg-[#252525]">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Signed in as</p>
+                    <p className="text-sm font-bold text-white truncate">{profile?.full_name || "User"}</p>
+                    {/* 🛠️ FIX: Using user.email directly from auth object */}
+                    <p className="text-xs font-bold text-gray-400 truncate">{user?.email}</p>
+                  </div>
 
-                {showDropdown && (
-                  <div className="absolute right-0 mt-3 w-64 bg-[#2b2b2b] border border-[#3b3b3b] rounded-xl shadow-2xl overflow-hidden z-[60]">
-                    <div className="px-4 py-3 border-b border-[#3b3b3b] bg-[#222222]">
-                      <p className="text-xs text-gray-500 uppercase font-black mb-1">
-                        Signed in as
-                      </p>
-                      {/* Displays Full Name and Email */}
-                      <p className="text-sm truncate text-blue-400 font-medium">
-                        {profile?.full_name || "User"}
-                      </p>
-                      <p className="text-[10px] text-gray-500 truncate">
-                        {user.email}
-                      </p>
-                    </div>
-                    <Link
-                      href="/pages/user"
-                      className="block px-4 py-3 text-sm text-gray-200 hover:bg-[#1f538d] transition-colors"
-                      onClick={() => setShowDropdown(false)}
+                  <div className="p-2 space-y-1">
+                    <Link 
+                      href="/pages/user" 
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-3 w-full px-3 py-2 text-sm text-gray-300 hover:bg-[#333] hover:text-white rounded-lg transition-colors"
                     >
-                      ⚙️ Edit My Profile
+                      <FaCog className="text-gray-500" /> Edit My Profile
                     </Link>
-                    <Link
-                      href="/pages/user/my-tickets"
-                      className="block px-4 py-3 text-sm text-gray-200 hover:bg-[#1f538d] transition-colors"
-                      onClick={() => setShowDropdown(false)}
+                    
+                    <Link 
+                      href="/pages/user/my-tickets" 
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-3 w-full px-3 py-2 text-sm text-gray-300 hover:bg-[#333] hover:text-white rounded-lg transition-colors"
                     >
-                      🎫 Manage My Tickets
+                      <FaTicketAlt className="text-yellow-500" /> My Tickets
                     </Link>
-                    <button
-                      onClick={() => {
-                        supabase.auth.signOut();
-                        setShowDropdown(false);
-                        router.push("/auth");
-                      }}
-                      className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-red-950/30 border-t border-[#3b3b3b] transition-colors"
+                  </div>
+
+                  <div className="p-2 border-t border-[#333]">
+                    <button 
+                      onClick={handleSignOut}
+                      className="flex items-center gap-3 w-full px-3 py-2 text-sm text-red-400 hover:bg-red-900/20 hover:text-red-300 rounded-lg transition-colors font-bold"
                     >
-                      🚪 Logout
+                      <FaSignOutAlt /> Logout
                     </button>
                   </div>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="flex items-center gap-4">
-              <Link
-                href="/auth"
-                className="px-5 py-2 text-sm font-bold text-white hover:text-blue-400 transition-colors"
-              >
-                LOG IN
-              </Link>
-              <Link
-                href="/auth"
-                className="px-6 py-2.5 text-sm font-bold bg-blue-600 rounded-lg hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/30"
-              >
-                SIGN UP
-              </Link>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-
-        {/* MOBILE MENU BUTTON */}
-        <div className="md:hidden flex items-center gap-4">
-          <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="text-white text-3xl focus:outline-none p-1"
+          </>
+        ) : (
+          <Link 
+            href="/auth" 
+            className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-full text-sm font-bold transition-all shadow-lg shadow-blue-900/20"
           >
-            {isMobileMenuOpen ? "✕" : "☰"}
-          </button>
-        </div>
+            Sign In
+          </Link>
+        )}
       </div>
-
-      {/* MOBILE MENU DROPDOWN */}
-      {isMobileMenuOpen && (
-        <div className="md:hidden mt-4 pb-4 space-y-2 border-t border-[#3b3b3b] pt-4 animate-in slide-in-from-top-2">
-          {user && (
-            <div className="px-4 py-3 border-b border-[#3b3b3b] mb-2">
-              <p className="text-xs text-gray-500 uppercase font-black mb-1">
-                Signed in as
-              </p>
-              <div className="flex items-baseline gap-2 overflow-hidden">
-                {/* Full Name in Blue */}
-                <span className="text-blue-400 font-bold truncate">
-                  {profile?.full_name || "User"}
-                </span>
-                {/* Email next to name, small and gray */}
-                <span className="text-[10px] text-gray-500 truncate shrink-0">
-                  {user.email}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {user ? (
-            <>
-              <Link
-                href="/pages/request"
-                className="block px-4 py-3 text-gray-300 hover:bg-[#2b2b2b] rounded-lg"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Create a Ticket 🎫
-              </Link>
-              <Link
-                href="/pages/user"
-                className="block px-4 py-3 text-gray-300 hover:bg-[#2b2b2b] rounded-lg"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                ⚙️ Profile
-              </Link>
-              <Link
-                href="/pages/user/my-tickets"
-                className="block px-4 py-3 text-gray-300 hover:bg-[#2b2b2b] rounded-lg"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                🎫 My Tickets
-              </Link>
-              <button
-                onClick={() => {
-                  supabase.auth.signOut();
-                  setIsMobileMenuOpen(false);
-                  router.push("/auth");
-                }}
-                className="w-full text-left px-4 py-3 text-red-400 hover:bg-red-950/20 rounded-lg transition-colors"
-              >
-                🚪 Logout
-              </button>
-            </>
-          ) : (
-            <div className="flex flex-col gap-2 px-4">
-              <Link
-                href="/auth"
-                className="w-full text-center py-3 text-gray-300 border border-[#3b3b3b] rounded-lg font-bold"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                LOG IN
-              </Link>
-              <Link
-                href="/auth"
-                className="w-full text-center py-3 bg-blue-600 rounded-lg font-bold"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                SIGN UP
-              </Link>
-            </div>
-          )}
-        </div>
-      )}
     </nav>
   );
 }

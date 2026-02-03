@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { 
@@ -14,17 +15,22 @@ import {
   FaSignOutAlt,
   FaThLarge, 
   FaList,
-  FaTimes
+  FaTimes,
+  FaCalendarAlt, 
+  FaTachometerAlt,
+  FaLongArrowAltRight // 🆕 Icon for BPM transition
 } from "react-icons/fa";
 
 type Ticket = {
   id: string;
   title: string;
-  // 🔴 FIX: Updated 'in_progress' to 'in progress'
   status: 'pending' | 'accepted' | 'in progress' | 'completed';
   created_at: string;
   user_id: string;
   position: number;
+  base_bpm?: number;    // 🆕 Base BPM
+  target_bpm?: number;  // 🆕 Target BPM
+  deadline?: string;    // 🆕 Renamed from due_date
   profiles: {
     full_name: string;
     avatar_url: string;
@@ -81,42 +87,32 @@ export default function AdminDashboard() {
     }
 
     const newStatus = destination.droppableId as Ticket['status'];
-    
     const currentTickets = [...tickets];
     const draggedTicket = currentTickets.find(t => t.id.toString() === draggableId);
     
     if (!draggedTicket) return;
 
-    // Remove from old list
     const ticketsWithoutDragged = currentTickets.filter(t => t.id.toString() !== draggableId);
 
-    // Get target column
     const destColumn = ticketsWithoutDragged
       .filter(t => t.status === newStatus)
       .sort((a, b) => a.position - b.position);
 
-    // Update ticket status
     const updatedTicket = { ...draggedTicket, status: newStatus };
-    
-    // Insert into new specific index
     destColumn.splice(destination.index, 0, updatedTicket);
 
-    // Recalculate positions for the column
     const updatedDestColumn = destColumn.map((ticket, index) => ({
       ...ticket,
       position: index * 1000 + 1000 
     }));
 
-    // Merge back
     const finalTickets = [
       ...ticketsWithoutDragged.filter(t => t.status !== newStatus),
       ...updatedDestColumn
     ].sort((a, b) => a.position - b.position); 
 
-    // Optimistic UI update
     setTickets(finalTickets);
 
-    // Database Update
     const updates = updatedDestColumn.map(t => ({
       id: t.id,
       status: t.status,
@@ -168,7 +164,7 @@ export default function AdminDashboard() {
       <DragDropContext onDragEnd={onDragEnd}>
         <div className={`grid grid-cols-1 md:grid-cols-4 gap-4 min-w-[1000px] pb-10 ${viewMode === 'compact' ? 'items-start' : 'h-full'}`}>
             
-            {/* 1. NEW (Pending) */}
+            {/* 1. NEW */}
             <Column id="pending" title="New" color="border-gray-500" count={getTicketsByStatus('pending').length} icon={<FaClock className="text-gray-400"/>} viewMode={viewMode}>
                 {getTicketsByStatus('pending').map((ticket, index) => (
                     <DraggableTicket key={ticket.id} ticket={ticket} index={index} viewMode={viewMode} onDelete={deleteTicket}>
@@ -177,18 +173,16 @@ export default function AdminDashboard() {
                 ))}
             </Column>
 
-            {/* 2. QUEUE (Accepted) */}
+            {/* 2. QUEUE */}
             <Column id="accepted" title="Queue" color="border-blue-500" count={getTicketsByStatus('accepted').length} icon={<FaCheck className="text-blue-500"/>} viewMode={viewMode}>
                 {getTicketsByStatus('accepted').map((ticket, index) => (
                     <DraggableTicket key={ticket.id} ticket={ticket} index={index} viewMode={viewMode} onDelete={deleteTicket}>
-                        {/* 🔴 FIX: Use 'in progress' here */}
                         <ActionButton onClick={() => updateStatus(ticket.id, 'in progress')} color="bg-yellow-600 hover:bg-yellow-500" icon={<FaPlay />} label="Start" mode={viewMode} />
                     </DraggableTicket>
                 ))}
             </Column>
 
-            {/* 3. IN PROGRESS (Playing) */}
-            {/* 🔴 FIX: Column ID and Filter updated to 'in progress' */}
+            {/* 3. IN PROGRESS */}
             <Column id="in progress" title="In Progress" color="border-yellow-500" count={getTicketsByStatus('in progress').length} icon={<FaPlay className="text-yellow-500"/>} viewMode={viewMode}>
                 {getTicketsByStatus('in progress').map((ticket, index) => (
                     <DraggableTicket key={ticket.id} ticket={ticket} index={index} viewMode={viewMode} onDelete={deleteTicket} isActive>
@@ -197,7 +191,7 @@ export default function AdminDashboard() {
                 ))}
             </Column>
 
-            {/* 4. DONE (Completed) */}
+            {/* 4. DONE */}
             <Column id="completed" title="Done" color="border-green-600" count={getTicketsByStatus('completed').length} icon={<FaCheckDouble className="text-green-600"/>} viewMode={viewMode}>
                 {getTicketsByStatus('completed').slice(0, 15).map((ticket, index) => (
                     <DraggableTicket key={ticket.id} ticket={ticket} index={index} viewMode={viewMode} onDelete={deleteTicket} isCompact>
@@ -266,38 +260,108 @@ function DraggableTicket({ ticket, index, viewMode, onDelete, isActive, isCompac
 }
 
 function TicketCardContent({ ticket, children, isActive, isCompact, onDelete, mode }: any) {
+  // 🆕 Check urgency (deadline today or earlier)
+  const isUrgent = ticket.deadline && new Date(ticket.deadline).setHours(0,0,0,0) <= new Date().setHours(0,0,0,0);
+
+  // 🆕 Helper to render BPM range
+  const renderBPM = () => {
+    if (ticket.base_bpm && ticket.target_bpm) {
+      return <>{ticket.base_bpm} <FaLongArrowAltRight className="mx-0.5" /> {ticket.target_bpm}</>;
+    }
+    if (ticket.base_bpm) return <>{ticket.base_bpm}</>;
+    return null;
+  };
+
+  // --- COMPACT VIEW ---
   if (mode === 'compact') {
     return (
       <div className={`relative group flex items-center gap-3 p-2 rounded bg-[#222] border border-[#333] hover:border-gray-500 transition-all ${isActive ? 'border-yellow-500/50 bg-[#2a2a22]' : ''}`}>
+        
+        {/* Avatar */}
         <div className="w-6 h-6 rounded-full bg-gray-700 overflow-hidden shrink-0">
              {ticket.profiles?.avatar_url ? <img src={ticket.profiles.avatar_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[8px] text-gray-400"><FaUser /></div>}
         </div>
+
+        {/* Info */}
         <div className="flex-1 min-w-0 flex flex-col">
-            <span className="text-xs font-bold text-white truncate leading-tight">{ticket.title}</span>
-            <span className="text-[9px] text-gray-500 truncate flex items-center gap-1">{isActive && <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"></span>}{ticket.profiles?.full_name}</span>
+            {/* Clickable Title */}
+            <Link href={`/pages/admin/request/${ticket.id}`} className="text-xs font-bold text-white truncate leading-tight hover:text-blue-400 hover:underline">
+                {ticket.title}
+            </Link>
+
+            <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-[9px] text-gray-500 truncate flex items-center gap-1">
+                    {isActive && <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"></span>}
+                    {ticket.profiles?.full_name}
+                </span>
+
+                {/* 🆕 Compact Metadata */}
+                {(ticket.base_bpm || ticket.target_bpm) && (
+                  <span className="text-[8px] text-gray-500 border border-[#444] px-1 rounded flex items-center gap-1">
+                    <FaTachometerAlt /> {renderBPM()}
+                  </span>
+                )}
+                {ticket.deadline && (
+                  <span className={`text-[8px] border border-[#444] px-1 rounded flex items-center gap-1 ${isUrgent ? 'text-red-400 border-red-900/50 bg-red-900/10' : 'text-gray-500'}`}>
+                    <FaCalendarAlt /> {new Date(ticket.deadline).toLocaleDateString(undefined, {month:'numeric', day:'numeric'})}
+                  </span>
+                )}
+            </div>
         </div>
+
         {!isCompact && <div className="shrink-0">{children}</div>}
         <button onClick={onDelete} className="text-gray-600 hover:text-red-500 opacity-0 group-hover:opacity-100 px-1"><FaTimes size={10} /></button>
       </div>
     );
   }
 
+  // --- DETAILED BOARD VIEW ---
   return (
     <div className={`relative group p-4 rounded-xl border transition-all ${isActive ? 'bg-[#2a2a2a] border-yellow-500 shadow-yellow-900/20 shadow-lg' : 'bg-[#222] border-[#333] hover:border-gray-500'}`}>
       <button onClick={onDelete} className="absolute top-2 right-2 text-gray-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"><FaTrash size={10} /></button>
+      
+      {/* User Header */}
       <div className="flex items-center gap-3 mb-3">
         <div className="w-8 h-8 rounded-full bg-gray-700 overflow-hidden shrink-0 border border-[#444]">
              {ticket.profiles?.avatar_url ? <img src={ticket.profiles.avatar_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400"><FaUser /></div>}
         </div>
         <div className="flex flex-col overflow-hidden">
-            <span className="text-xs text-gray-300 font-bold truncate">{ticket.profiles?.full_name || "Unknown"}</span>
+            {/* 🆕 LINK ADDED HERE */}
+            <Link 
+              href={`/pages/admin/user/${ticket.user_id}`}
+              className="text-xs text-gray-300 font-bold truncate hover:text-blue-400 hover:underline transition-all"
+              onClick={(e) => e.stopPropagation()} // Prevent drag conflict
+            >
+                {ticket.profiles?.full_name || "Unknown"}
+            </Link>
             <span className="text-[10px] text-gray-600 font-mono">{new Date(ticket.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
         </div>
       </div>
-      <div className={`font-bold text-white mb-3 flex items-start gap-2 ${isCompact ? 'text-sm' : 'text-base'}`}>
-        <FaMusic className="text-blue-500 text-xs mt-1 shrink-0" />
-        <span className="leading-snug break-words">{ticket.title}</span>
+
+      {/* Title & Metadata Block */}
+      <div className="mb-3">
+        <Link href={`/pages/admin/request/${ticket.id}`} className={`block font-bold text-white flex items-start gap-2 hover:text-blue-400 transition-colors ${isCompact ? 'text-sm' : 'text-base'}`}>
+            <FaMusic className="text-blue-500 text-xs mt-1 shrink-0" />
+            <span className="leading-snug break-words">{ticket.title}</span>
+        </Link>
+        
+        {/* 🆕 DETAILED METADATA ROW */}
+        {!isCompact && (ticket.base_bpm || ticket.deadline) && (
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+                {(ticket.base_bpm || ticket.target_bpm) && (
+                    <span className="text-[10px] text-gray-400 bg-[#333] px-2 py-0.5 rounded-md flex items-center gap-1.5 font-mono">
+                        <FaTachometerAlt className="text-gray-500" /> {renderBPM()}
+                    </span>
+                )}
+                {ticket.deadline && (
+                    <span className={`text-[10px] px-2 py-0.5 rounded-md flex items-center gap-1.5 ${isUrgent ? 'bg-red-900/20 text-red-400 border border-red-900/50' : 'bg-[#333] text-gray-400'}`}>
+                        <FaCalendarAlt /> {new Date(ticket.deadline).toLocaleDateString()}
+                    </span>
+                )}
+            </div>
+        )}
       </div>
+      
       {!isCompact && <div className="mt-2 pt-3 border-t border-[#333]">{children}</div>}
       {isCompact && children}
     </div>
