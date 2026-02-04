@@ -1,164 +1,144 @@
 "use client";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { 
-  FaChevronLeft, 
-  FaClock, 
-  FaCheck, 
-  FaPlay, 
-  FaCheckDouble, 
-  FaTrash, 
-  FaMusic 
-} from "react-icons/fa";
+import { useRouter } from "next/navigation";
+import { FaMusic, FaClock } from "react-icons/fa"; 
+// 🛠️ Import the helper
+import { getYouTubeThumbnail } from "@/app/lib/utils";
 
 type Ticket = {
-  id: string;
+  id: number;
   title: string;
-  status: 'pending' | 'accepted' | 'in progress' | 'completed';
+  youtube_link: string;
+  status: "new" | "queue" | "in progress" | "done";
   created_at: string;
+  base_bpm: string;
+  target_bpm: string;
+  deadline: string;
 };
 
 export default function MyTicketsPage() {
-  const router = useRouter();
+  const [myTickets, setMyTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const router = useRouter();
 
   useEffect(() => {
     fetchMyTickets();
   }, []);
 
   async function fetchMyTickets() {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/auth");
-        return;
-      }
-
-      // Fetch tickets for THIS user only
-      const { data, error } = await supabase
-        .from("song_requests")
-        .select("*")
-        .eq("user_id", user.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setTickets(data || []);
-    } catch (error) {
-      console.error("Error fetching tickets:", error);
-    } finally {
-      setLoading(false);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push("/auth");
+      return;
     }
+
+    const { data, error } = await supabase
+      .from("song_requests")
+      .select("*")
+      .eq("user_id", user.id) // Only get MY tickets
+      .order("created_at", { ascending: false });
+
+    if (error) console.error("Error:", error);
+    else setMyTickets(data as Ticket[]);
+    
+    setLoading(false);
   }
 
-  // 🗑️ Delete Request (Only if Pending)
-  async function deleteTicket(id: string) {
-    if (!confirm("Do you want to cancel this request?")) return;
-
-    setTickets(current => current.filter(t => t.id !== id));
-    await supabase.from("song_requests").delete().eq("id", id);
-  }
-
-  // 🎨 STATUS BADGE GENERATOR
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'accepted': // BLUE
-        return (
-          <span className="flex items-center gap-1.5 bg-blue-900/30 text-blue-400 border border-blue-800/50 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
-            <FaCheck /> Queue
-          </span>
-        );
-      case 'in progress': // YELLOWISH
-        return (
-          <span className="flex items-center gap-1.5 bg-yellow-900/30 text-yellow-400 border border-yellow-800/50 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
-            <FaPlay className="text-[8px]" /> Playing
-            <span className="relative flex h-2 w-2 ml-1">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
-            </span>
-          </span>
-        );
-      case 'completed': // GREEN (Success)
-        return (
-          <span className="flex items-center gap-1.5 bg-green-900/30 text-green-400 border border-green-800/50 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
-            <FaCheckDouble /> Done
-          </span>
-        );
-      default: // PENDING (Gray/Neutral)
-        return (
-          <span className="flex items-center gap-1.5 bg-zinc-800 text-gray-400 border border-zinc-700 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
-            <FaClock /> Pending
-          </span>
-        );
-    }
-  };
+  if (loading) return <div className="p-10 text-center text-white">Loading your tickets...</div>;
 
   return (
-    <main className="min-h-screen bg-[#1a1a1a] text-white font-sans">
-      
-      {/* Header */}
-      <div className="relative h-32 bg-gradient-to-b from-blue-900/20 to-[#1a1a1a]">
-        <div 
-            className="absolute top-6 left-6 cursor-pointer p-2 bg-black/20 hover:bg-white/10 rounded-full transition-colors backdrop-blur-sm" 
-            onClick={() => router.back()}
-        >
-          <FaChevronLeft className="text-lg" />
-        </div>
-        <div className="absolute bottom-4 left-6">
-          <h1 className="text-2xl font-bold">My Tickets</h1>
-          <p className="text-xs text-gray-500">Track your song requests</p>
-        </div>
-      </div>
+    <div className="min-h-screen p-8 max-w-4xl mx-auto">
+      <h1 className="text-3xl font-bold text-white mb-8 flex items-center gap-3">
+        <span className="text-blue-500">My</span> Tickets
+      </h1>
 
-      <div className="px-6 pb-20 max-w-lg mx-auto">
-        {loading ? (
-           <div className="text-center py-10 text-gray-500 animate-pulse">Loading tickets...</div>
-        ) : tickets.length === 0 ? (
-           <div className="text-center py-16 flex flex-col items-center opacity-50">
-             <FaMusic className="text-4xl mb-4 text-gray-600" />
-             <p className="text-gray-400">No requests yet.</p>
-           </div>
-        ) : (
-          <div className="space-y-3">
-            {tickets.map((ticket) => (
-              <div 
-                key={ticket.id} 
-                className={`
-                  relative bg-[#222] border rounded-xl p-4 transition-all
-                  ${ticket.status === 'in progress' ? 'border-yellow-500/30 shadow-[0_0_15px_rgba(234,179,8,0.1)]' : 'border-[#333]'}
-                `}
-              >
-                <div className="flex justify-between items-start mb-2">
-                   {getStatusBadge(ticket.status)}
-                   
-                   {/* Delete Button (Only visible if pending) */}
-                   {ticket.status === 'pending' && (
-                     <button 
-                       onClick={() => deleteTicket(ticket.id)}
-                       className="text-gray-600 hover:text-red-500 p-1 transition-colors"
-                     >
-                       <FaTrash size={12} />
-                     </button>
+      <div className="space-y-4">
+        {myTickets.map((ticket) => {
+          // 1. Get Thumbnail
+          const thumbnail = getYouTubeThumbnail(ticket.youtube_link);
+          const isInProgress = ticket.status === 'in progress';
+
+          return (
+            <div 
+              key={ticket.id} 
+              className={`bg-[#1e1e1e] border border-[#333] p-4 rounded-xl flex items-center gap-4 transition-all group
+                ${isInProgress ? 'border-yellow-600/50 shadow-[0_0_15px_rgba(234,179,8,0.1)]' : 'hover:border-gray-500'}
+              `}
+            >
+              
+              {/* 🖼️ THUMBNAIL / ICON LOGIC */}
+              <div className="shrink-0">
+                {thumbnail ? (
+                  <a 
+                    href={ticket.youtube_link} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="block w-16 h-16 rounded-lg overflow-hidden border border-[#444] relative group/img"
+                  >
+                    <img src={thumbnail} alt="Cover" className="w-full h-full object-cover" />
+                    {/* Play Overlay */}
+                    <div className="absolute inset-0 bg-black/20 group-hover/img:bg-transparent flex items-center justify-center transition-all">
+                      <div className="w-0 h-0 border-l-[8px] border-l-white border-y-[5px] border-y-transparent ml-1 shadow-sm drop-shadow-md"></div>
+                    </div>
+                  </a>
+                ) : (
+                  // 🎵 FALLBACK ICON (If no link)
+                  <div className={`w-16 h-16 rounded-lg flex items-center justify-center text-2xl border border-[#333]
+                    ${isInProgress ? 'bg-yellow-900/20 text-yellow-500' : 'bg-[#2a2a2a] text-blue-500'}
+                  `}>
+                    <FaMusic />
+                  </div>
+                )}
+              </div>
+
+              {/* INFO */}
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-start">
+                  <h3 className="font-bold text-lg text-white truncate pr-4">{ticket.title}</h3>
+                  
+                  {/* PULSATING STATUS BADGE */}
+                  <div className="flex items-center">
+                    {isInProgress && (
+                      <span className="relative flex h-2.5 w-2.5 mr-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-yellow-500"></span>
+                      </span>
+                    )}
+                    
+                    <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider border
+                      ${ticket.status === 'done' ? 'bg-green-900/30 text-green-400 border-green-800' : ''}
+                      ${ticket.status === 'in progress' ? 'bg-yellow-900/30 text-yellow-400 border-yellow-800 animate-pulse' : ''}
+                      ${ticket.status === 'queue' ? 'bg-blue-900/30 text-blue-400 border-blue-800' : ''}
+                      ${ticket.status === 'new' ? 'bg-gray-700 text-gray-300 border-gray-600' : ''}
+                    `}>
+                      {ticket.status}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 mt-1 text-xs text-gray-400">
+                   <span className="bg-[#252525] px-1.5 py-0.5 rounded border border-[#333]">
+                     {ticket.base_bpm} ➝ {ticket.target_bpm} BPM
+                   </span>
+                   {ticket.deadline && (
+                     <span className="flex items-center gap-1">
+                       <FaClock size={10} /> {ticket.deadline}
+                     </span>
                    )}
                 </div>
-
-                <div className="flex items-center gap-3">
-                    <div className={`p-2.5 rounded-lg ${ticket.status === 'in progress' ? 'bg-yellow-500/10 text-yellow-500' : 'bg-[#2a2a2a] text-blue-500'}`}>
-                        <FaMusic />
-                    </div>
-                    <div>
-                        <h3 className="font-bold text-sm text-gray-200 line-clamp-1">{ticket.title}</h3>
-                        <p className="text-[10px] text-gray-500 font-mono mt-0.5">
-                            {new Date(ticket.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                        </p>
-                    </div>
-                </div>
               </div>
-            ))}
-          </div>
+
+            </div>
+          );
+        })}
+
+        {myTickets.length === 0 && (
+            <div className="text-center py-10 text-gray-500 bg-[#1e1e1e] rounded-xl border border-[#333] border-dashed">
+                You haven't requested any songs yet.
+            </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }

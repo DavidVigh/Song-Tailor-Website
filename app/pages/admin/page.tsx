@@ -1,376 +1,478 @@
 "use client";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
-import { 
-  FaCheck, 
-  FaPlay, 
-  FaCheckDouble, 
-  FaTrash, 
-  FaClock, 
-  FaUser, 
-  FaMusic, 
-  FaSignOutAlt,
-  FaThLarge, 
-  FaList,
-  FaTimes,
-  FaCalendarAlt, 
-  FaTachometerAlt,
-  FaLongArrowAltRight // 🆕 Icon for BPM transition
+import { useRouter } from "next/navigation";
+import {
+  DragDropContext,
+  Droppable,
+  Draggable,
+  DropResult,
+} from "@hello-pangea/dnd";
+import {
+  FaMusic,
+  FaTrash,
+  FaCheck,
+  FaPlay,
+  FaClock,
+  FaCheckCircle,
+  FaUsers, // 👈 Added import
 } from "react-icons/fa";
+import { getYouTubeThumbnail } from "@/app/lib/utils";
+import Link from "next/link";
 
+// --- TYPES ---
 type Ticket = {
-  id: string;
-  title: string;
-  status: 'pending' | 'accepted' | 'in progress' | 'completed';
-  created_at: string;
+  id: number;
   user_id: string;
-  position: number;
-  base_bpm?: number;    // 🆕 Base BPM
-  target_bpm?: number;  // 🆕 Target BPM
-  deadline?: string;    // 🆕 Renamed from due_date
-  profiles: {
+  title: string;
+  youtube_link: string;
+  base_bpm: string;
+  target_bpm: string;
+  music_type: string;
+  deadline: string;
+  status: "new" | "queue" | "in progress" | "done";
+  created_at: string;
+  position: number; // 👈 CRITICAL: We need this for ordering
+  profiles?: {
     full_name: string;
     avatar_url: string;
   };
 };
 
-export default function AdminDashboard() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(true);
+// --- COLUMNS CONFIG ---
+const columns = [
+  { id: "new", title: "NEW", color: "bg-gray-700", border: "border-gray-600" },
+  {
+    id: "queue",
+    title: "QUEUE",
+    color: "bg-blue-600",
+    border: "border-blue-500",
+  },
+  {
+    id: "in progress",
+    title: "IN PROGRESS",
+    color: "bg-yellow-600",
+    border: "border-yellow-500",
+  },
+  {
+    id: "done",
+    title: "DONE",
+    color: "bg-green-600",
+    border: "border-green-500",
+  },
+];
+
+// --- SUB-COMPONENT: Draggable Card (Handles Image Errors) ---
+const DraggableCard = ({
+  ticket,
+  index,
+  col,
+  handleDelete,
+  advanceStatus,
+}: any) => {
+  const [imgError, setImgError] = useState(false);
+  const thumbnail = getYouTubeThumbnail(ticket.youtube_link);
+  const hasValidImage = thumbnail && !imgError;
+
+  return (
+    <Draggable key={ticket.id} draggableId={ticket.id.toString()} index={index}>
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          {...provided.draggableProps}
+          {...provided.dragHandleProps}
+          style={{ ...provided.draggableProps.style }}
+          // 🛠️ Main container changes:
+          // 1. 'overflow-hidden' ensures the blurry background doesn't poke out corners.
+          // 2. Removed padding 'p-4' (it moved to inner content wrapper).
+          // 3. Added fallback 'bg-[#1e1e1e]' only if no image exists.
+          className={`border border-[#333] rounded-xl mb-3 shadow-lg group relative overflow-hidden
+            transition-all duration-200 ease-in-out hover:border-gray-500
+            ${snapshot.isDragging ? "shadow-2xl ring-2 ring-blue-500 rotate-2 opacity-90 z-50" : ""}
+            ${!hasValidImage ? "bg-[#1e1e1e]" : ""} 
+          `}
+        >
+          {/* 🖼️ LAYER 1: Blurred Background & Dimming Overlay */}
+          {hasValidImage && (
+            <>
+              {/* The blurry image */}
+              <div
+                className="absolute inset-0 z-0 bg-cover bg-center filter blur-2xs scale-125 transition-opacity duration-300 opacity-80"
+                style={{ backgroundImage: `url('${thumbnail}')` }}
+              />
+              {/* The dark overlay for readability */}
+              <div className="absolute inset-0 z-0 bg-black/80 transition-opacity duration-300" />
+            </>
+          )}
+          {/* 📦 LAYER 2: Actual Card Content (sits on top) */}
+          <div className="relative z-10 p-4">
+            {" "}
+            {/* Padding is now here */}
+            {/* DELETE BUTTON */}
+            <button
+              onClick={() => handleDelete(ticket.id)}
+              className="absolute top-0 right-0 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-20 p-2 hover:bg-black/50 rounded-bl-lg"
+              title="Delete Ticket"
+            >
+              <FaTrash size={14} />
+            </button>
+            {/* 👤 USER HEADER */}
+            <Link
+              href={`/pages/admin/user/${ticket.user_id}?from=dashboard`} // 👈 Added query param
+              className="flex items-center gap-3 mb-3 hover:bg-black/30 p-2 -mx-2 -mt-2 rounded-lg transition-colors group/user"
+            >
+              <div className="w-8 h-8 rounded-full overflow-hidden bg-[#333] border border-transparent group-hover/user:border-gray-400 transition-colors shadow-sm">
+                {ticket.profiles?.avatar_url ? (
+                  <img
+                    src={ticket.profiles.avatar_url}
+                    alt="User"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600" />
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-200 group-hover/user:text-white truncate shadow-sm">
+                  {ticket.profiles?.full_name || "Unknown User"}
+                </p>
+                <p className="text-[10px] text-gray-400">
+                  {new Date(ticket.created_at).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+              </div>
+            </Link>
+            {/* 🎵 SONG INFO */}
+            <div className="flex items-start gap-3 mb-4">
+              {/* Small Thumbnail Front */}
+              <div className="shrink-0 mt-0.5">
+                {hasValidImage ? (
+                  <a
+                    href={ticket.youtube_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block w-12 h-12 rounded-lg overflow-hidden border border-white/20 relative group/img hover:border-white transition-colors shadow-md"
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <img
+                      src={thumbnail}
+                      alt="Song"
+                      className="w-full h-full object-cover"
+                      onError={() => setImgError(true)}
+                    />
+                    <div className="absolute inset-0 bg-black/20 group-hover/img:bg-transparent transition-all flex items-center justify-center">
+                      <div className="w-0 h-0 border-l-[6px] border-l-white border-y-[4px] border-y-transparent ml-0.5 drop-shadow-md"></div>
+                    </div>
+                  </a>
+                ) : (
+                  <div className="w-12 h-12 rounded-lg bg-black/50 flex items-center justify-center text-blue-400 border border-white/10">
+                    <FaMusic />
+                  </div>
+                )}
+              </div>
+
+              <div className="min-w-0 flex-1">
+                {/* Title Link */}
+                <Link
+                  href={`/pages/admin/request/${ticket.id}`}
+                  className="group/title block"
+                >
+                  <h3
+                    className="text-sm font-bold text-white truncate leading-tight mb-1 group-hover/title:text-blue-300 transition-colors drop-shadow-sm"
+                    title={ticket.title}
+                  >
+                    {ticket.title}
+                  </h3>
+                </Link>
+
+                {/* Tags */}
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <span className="text-[10px] bg-black/50 text-gray-300 px-2 py-0.5 rounded border border-white/10 backdrop-blur-sm">
+                    {ticket.base_bpm || "?"} ➝ {ticket.target_bpm || "?"}
+                  </span>
+                  {ticket.deadline && (
+                    <span className="text-[10px] bg-black/50 text-gray-300 px-2 py-0.5 rounded border border-white/10 flex items-center gap-1 backdrop-blur-sm">
+                      <FaClock size={8} /> {ticket.deadline}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            {/* ACTION BUTTON */}
+            {col.id !== "done" && (
+              <button
+                onClick={() => advanceStatus(ticket)}
+                className={`w-full py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md
+                  ${col.id === "new" ? "bg-blue-600/90 hover:bg-blue-500 text-white" : ""}
+                  ${col.id === "queue" ? "bg-yellow-600/90 hover:bg-yellow-500 text-white" : ""}
+                  ${col.id === "in progress" ? "bg-green-600/90 hover:bg-green-500 text-white" : ""}
+                `}
+              >
+                {col.id === "new" && (
+                  <>
+                    <FaCheck /> Accept
+                  </>
+                )}
+                {col.id === "queue" && (
+                  <>
+                    <FaPlay /> Start
+                  </>
+                )}
+                {col.id === "in progress" && (
+                  <>
+                    <FaCheckCircle /> Finish
+                  </>
+                )}
+              </button>
+            )}
+            {col.id === "done" && (
+              <div className="text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2 bg-black/30 py-1 rounded-lg">
+                Played
+              </div>
+            )}
+          </div>{" "}
+          {/* End Layer 2 */}
+        </div>
+      )}
+    </Draggable>
+  );
+};
+// --- MAIN PAGE COMPONENT ---
+export default function AdminPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [viewMode, setViewMode] = useState<'board' | 'compact'>('board');
+  const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
-    checkAdminAndFetch();
+    checkAdmin();
   }, []);
 
-  async function checkAdminAndFetch() {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/auth"); return; }
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single();
-
-      if (profile?.role !== 'admin') {
-        router.push("/pages/user/my-tickets"); 
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("song_requests")
-        .select(`*, profiles (full_name, avatar_url)`)
-        .order('position', { ascending: true });
-
-      if (error) throw error;
-      setTickets(data || []);
-
-    } catch (error) {
-      console.error("Error fetching admin data:", error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // 🔄 DRAG END HANDLER
-  const onDragEnd = async (result: DropResult) => {
-    const { destination, source, draggableId } = result;
-
-    if (!destination || (destination.droppableId === source.droppableId && destination.index === source.index)) {
+  async function checkAdmin() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      router.push("/auth");
       return;
     }
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
 
-    const newStatus = destination.droppableId as Ticket['status'];
-    const currentTickets = [...tickets];
-    const draggedTicket = currentTickets.find(t => t.id.toString() === draggableId);
-    
+    if (profile?.role !== "admin") {
+      router.push("/");
+      return;
+    }
+    setIsAdmin(true);
+    fetchTickets();
+  }
+
+  async function fetchTickets() {
+    const { data, error } = await supabase
+      .from("song_requests")
+      .select(`*, profiles (full_name, avatar_url)`)
+      // 🛠️ SORT BY POSITION (Important!)
+      .order("position", { ascending: true })
+      .order("created_at", { ascending: false });
+
+    if (error) console.error("Error fetching tickets:", error);
+    else setTickets(data as Ticket[]);
+
+    setLoading(false);
+  }
+
+  // 🛠️ POSITIONING LOGIC UPDATE
+  async function onDragEnd(result: DropResult) {
+    const { source, destination, draggableId } = result;
+
+    if (!destination) return;
+    if (
+      source.droppableId === destination.droppableId &&
+      source.index === destination.index
+    )
+      return;
+
+    // 1. Clone the array to avoid direct mutation
+    const allTickets = Array.from(tickets);
+
+    // 2. Identify the dragged ticket
+    const draggedTicket = allTickets.find(
+      (t) => t.id.toString() === draggableId,
+    );
     if (!draggedTicket) return;
 
-    const ticketsWithoutDragged = currentTickets.filter(t => t.id.toString() !== draggableId);
+    // 3. Update status if column changed
+    const newStatus = destination.droppableId as Ticket["status"];
+    draggedTicket.status = newStatus;
 
-    const destColumn = ticketsWithoutDragged
-      .filter(t => t.status === newStatus)
+    // 4. Get tickets in destination column (sorted)
+    const destColumnTickets = allTickets
+      .filter((t) => t.status === newStatus && t.id.toString() !== draggableId)
       .sort((a, b) => a.position - b.position);
 
-    const updatedTicket = { ...draggedTicket, status: newStatus };
-    destColumn.splice(destination.index, 0, updatedTicket);
+    // 5. Calculate new Position
+    let newPosition;
+    if (destColumnTickets.length === 0) {
+      newPosition = 1000; // Default if empty
+    } else if (destination.index === 0) {
+      newPosition = destColumnTickets[0].position / 2; // Move to top
+    } else if (destination.index >= destColumnTickets.length) {
+      newPosition =
+        destColumnTickets[destColumnTickets.length - 1].position + 1000; // Move to bottom
+    } else {
+      const prevCard = destColumnTickets[destination.index - 1];
+      const nextCard = destColumnTickets[destination.index];
+      newPosition = (prevCard.position + nextCard.position) / 2; // Average (Middle)
+    }
 
-    const updatedDestColumn = destColumn.map((ticket, index) => ({
-      ...ticket,
-      position: index * 1000 + 1000 
-    }));
+    draggedTicket.position = newPosition;
 
-    const finalTickets = [
-      ...ticketsWithoutDragged.filter(t => t.status !== newStatus),
-      ...updatedDestColumn
-    ].sort((a, b) => a.position - b.position); 
+    // 6. Optimistic UI Update (Re-sort entire list)
+    setTickets([...allTickets].sort((a, b) => a.position - b.position));
 
-    setTickets(finalTickets);
+    // 7. Database Update
+    const { error } = await supabase
+      .from("song_requests")
+      .update({
+        status: newStatus,
+        position: newPosition,
+      })
+      .eq("id", draggableId);
 
-    const updates = updatedDestColumn.map(t => ({
-      id: t.id,
-      status: t.status,
-      position: t.position,
-      user_id: t.user_id,
-      title: t.title
-    }));
-
-    await supabase.from("song_requests").upsert(updates);
-  };
-
-  async function updateStatus(id: string, newStatus: string) {
-    setTickets(current => current.map(t => t.id === id ? { ...t, status: newStatus as any } : t));
-    await supabase.from("song_requests").update({ status: newStatus }).eq("id", id);
+    if (error) {
+      console.error("Move failed:", error);
+      fetchTickets();
+    }
   }
 
-  async function deleteTicket(id: string) {
-    if(!confirm("Delete this request?")) return;
-    setTickets(current => current.filter(t => t.id !== id));
-    await supabase.from("song_requests").delete().eq("id", id);
+  async function handleDelete(id: number) {
+    if (!confirm("Delete this ticket?")) return;
+    setTickets((prev) => prev.filter((t) => t.id !== id));
+    const { error } = await supabase
+      .from("song_requests")
+      .delete()
+      .eq("id", id);
+    if (error) fetchTickets();
   }
 
-  const getTicketsByStatus = (status: string) => tickets.filter(t => t.status === status);
+  async function advanceStatus(ticket: Ticket) {
+    const statusFlow: Record<string, Ticket["status"]> = {
+      new: "queue",
+      queue: "in progress",
+      "in progress": "done",
+    };
 
-  if (loading) return <div className="min-h-screen bg-[#1a1a1a] text-white flex items-center justify-center font-bold">Loading Panel...</div>;
+    const nextStatus = statusFlow[ticket.status];
+    if (!nextStatus) return;
+
+    // Move to bottom of next column
+    const nextColumnTickets = tickets.filter((t) => t.status === nextStatus);
+    const lastPosition =
+      nextColumnTickets.length > 0
+        ? Math.max(...nextColumnTickets.map((t) => t.position))
+        : 0;
+    const newPosition = lastPosition + 1000;
+
+    // Optimistic Update
+    setTickets((prev) =>
+      prev.map((t) =>
+        t.id === ticket.id
+          ? { ...t, status: nextStatus, position: newPosition }
+          : t,
+      ),
+    );
+
+    await supabase
+      .from("song_requests")
+      .update({ status: nextStatus, position: newPosition })
+      .eq("id", ticket.id);
+  }
+
+  if (loading)
+    return (
+      <div className="p-10 text-center text-white">Loading Admin Panel...</div>
+    );
+  if (!isAdmin) return null;
 
   return (
-    <main className="min-h-screen bg-[#121212] text-white p-6 font-sans overflow-x-auto">
-      
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-        <h1 className="text-2xl font-bold flex items-center gap-3">
-          <span className="bg-red-600 px-3 py-1 rounded text-sm font-mono tracking-widest">ADMIN</span>
-          <span>DJ Panel</span>
+    <div className="min-h-screen p-8 max-w-[1600px] mx-auto">
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+          <span className="bg-red-600 text-xs px-2 py-1 rounded text-white font-bold tracking-wider">
+            ADMIN
+          </span>
+          Dashboard
         </h1>
-        
-        <div className="flex items-center gap-4">
-            <div className="bg-[#2a2a2a] p-1 rounded-lg flex items-center border border-[#333]">
-                <button onClick={() => setViewMode('board')} className={`p-2 rounded-md transition-all ${viewMode === 'board' ? 'bg-[#444] text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}><FaThLarge /></button>
-                <button onClick={() => setViewMode('compact')} className={`p-2 rounded-md transition-all ${viewMode === 'compact' ? 'bg-[#444] text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}><FaList /></button>
-            </div>
-            <div className="h-6 w-px bg-[#333]"></div>
-            <button onClick={() => router.push("/pages/user")} className="text-gray-400 hover:text-white text-sm font-bold">Profile</button>
-            <button onClick={() => supabase.auth.signOut().then(() => router.push("/auth"))} className="text-red-500 hover:text-red-400 text-sm font-bold flex items-center gap-2"><FaSignOutAlt /></button>
-        </div>
+
+        {/* 🆕 LIST USERS BUTTON */}
+        <Link
+          href="/pages/admin/user"
+          className="flex items-center gap-2 bg-[#252525] hover:bg-[#333] text-gray-200 border border-[#333] px-4 py-2 rounded-lg font-bold transition-all shadow-lg hover:shadow-xl hover:text-white"
+        >
+          <FaUsers className="text-blue-500" /> List Users
+        </Link>
       </div>
 
-      {/* ✋ DRAG CONTEXT */}
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className={`grid grid-cols-1 md:grid-cols-4 gap-4 min-w-[1000px] pb-10 ${viewMode === 'compact' ? 'items-start' : 'h-full'}`}>
-            
-            {/* 1. NEW */}
-            <Column id="pending" title="New" color="border-gray-500" count={getTicketsByStatus('pending').length} icon={<FaClock className="text-gray-400"/>} viewMode={viewMode}>
-                {getTicketsByStatus('pending').map((ticket, index) => (
-                    <DraggableTicket key={ticket.id} ticket={ticket} index={index} viewMode={viewMode} onDelete={deleteTicket}>
-                        <ActionButton onClick={() => updateStatus(ticket.id, 'accepted')} color="bg-blue-600 hover:bg-blue-500" icon={<FaCheck />} label="Accept" mode={viewMode} />
-                    </DraggableTicket>
-                ))}
-            </Column>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {columns.map((col) => (
+            <div key={col.id} className="flex flex-col h-full">
+              <div
+                className={`flex items-center justify-between px-4 py-3 mb-4 rounded-lg border-t-4 bg-[#1e1e1e] ${col.border}`}
+              >
+                <div className="flex items-center gap-2">
+                  {col.id === "done" && (
+                    <FaCheckCircle className="text-green-500" />
+                  )}
+                  {col.id === "in progress" && (
+                    <FaPlay className="text-yellow-500 text-xs" />
+                  )}
+                  <h2 className="font-bold text-gray-300 text-sm tracking-widest uppercase">
+                    {col.title}
+                  </h2>
+                </div>
+                <span className="bg-[#333] text-gray-400 text-xs font-bold px-2 py-0.5 rounded-full">
+                  {tickets.filter((t) => t.status === col.id).length}
+                </span>
+              </div>
 
-            {/* 2. QUEUE */}
-            <Column id="accepted" title="Queue" color="border-blue-500" count={getTicketsByStatus('accepted').length} icon={<FaCheck className="text-blue-500"/>} viewMode={viewMode}>
-                {getTicketsByStatus('accepted').map((ticket, index) => (
-                    <DraggableTicket key={ticket.id} ticket={ticket} index={index} viewMode={viewMode} onDelete={deleteTicket}>
-                        <ActionButton onClick={() => updateStatus(ticket.id, 'in progress')} color="bg-yellow-600 hover:bg-yellow-500" icon={<FaPlay />} label="Start" mode={viewMode} />
-                    </DraggableTicket>
-                ))}
-            </Column>
-
-            {/* 3. IN PROGRESS */}
-            <Column id="in progress" title="In Progress" color="border-yellow-500" count={getTicketsByStatus('in progress').length} icon={<FaPlay className="text-yellow-500"/>} viewMode={viewMode}>
-                {getTicketsByStatus('in progress').map((ticket, index) => (
-                    <DraggableTicket key={ticket.id} ticket={ticket} index={index} viewMode={viewMode} onDelete={deleteTicket} isActive>
-                        <ActionButton onClick={() => updateStatus(ticket.id, 'completed')} color="bg-green-600 hover:bg-green-500" icon={<FaCheckDouble />} label="Finish" mode={viewMode} />
-                    </DraggableTicket>
-                ))}
-            </Column>
-
-            {/* 4. DONE */}
-            <Column id="completed" title="Done" color="border-green-600" count={getTicketsByStatus('completed').length} icon={<FaCheckDouble className="text-green-600"/>} viewMode={viewMode}>
-                {getTicketsByStatus('completed').slice(0, 15).map((ticket, index) => (
-                    <DraggableTicket key={ticket.id} ticket={ticket} index={index} viewMode={viewMode} onDelete={deleteTicket} isCompact>
-                        <div className="text-[10px] text-gray-600 text-center uppercase">Played</div>
-                    </DraggableTicket>
-                ))}
-            </Column>
-
+              <Droppable droppableId={col.id}>
+                {(provided, snapshot) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className={`flex-1 rounded-xl p-2 transition-colors min-h-[500px] ${
+                      snapshot.isDraggingOver
+                        ? "bg-[#252525]/50 border-2 border-dashed border-[#444]"
+                        : ""
+                    }`}
+                  >
+                    {tickets
+                      .filter((t) => t.status === col.id)
+                      // .sort((a, b) => a.position - b.position) // Already sorted in fetch/state
+                      .map((ticket, index) => (
+                        <DraggableCard
+                          key={ticket.id}
+                          ticket={ticket}
+                          index={index}
+                          col={col}
+                          handleDelete={handleDelete}
+                          advanceStatus={advanceStatus}
+                        />
+                      ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </div>
+          ))}
         </div>
       </DragDropContext>
-    </main>
-  );
-}
-
-// --- SUB-COMPONENTS ---
-
-function Column({ id, title, color, icon, count, children, viewMode }: any) {
-  return (
-    <div className={`flex flex-col bg-[#1a1a1a] rounded-xl border border-[#333] ${viewMode === 'compact' ? 'p-2' : 'p-4 h-full'}`}>
-      <div className={`flex items-center gap-2 mb-2 pb-2 border-b-2 ${color} text-gray-200 font-bold uppercase text-xs tracking-wider`}>
-        {icon} <span>{title}</span>
-        <span className="ml-auto bg-[#333] text-[10px] px-1.5 rounded-full text-white">{count}</span>
-      </div>
-      
-      <Droppable droppableId={id}>
-        {(provided, snapshot) => (
-            <div 
-                ref={provided.innerRef}
-                {...provided.droppableProps}
-                className={`space-y-2 flex-1 overflow-y-auto pr-1 custom-scrollbar min-h-[100px] transition-colors rounded-lg ${snapshot.isDraggingOver ? 'bg-[#222]' : ''}`}
-            >
-                {count === 0 && !snapshot.isDraggingOver && <div className="py-8 text-center text-gray-700 text-xs italic">Empty</div>}
-                {children}
-                {provided.placeholder}
-            </div>
-        )}
-      </Droppable>
     </div>
   );
-}
-
-function DraggableTicket({ ticket, index, viewMode, onDelete, isActive, isCompact, children }: any) {
-    return (
-        <Draggable draggableId={ticket.id.toString()} index={index}>
-            {(provided, snapshot) => (
-                <div
-                    ref={provided.innerRef}
-                    {...provided.draggableProps}
-                    {...provided.dragHandleProps}
-                    style={{ ...provided.draggableProps.style }}
-                    className={`${snapshot.isDragging ? "opacity-90 scale-105 shadow-2xl z-50" : ""}`}
-                >
-                    <TicketCardContent 
-                        ticket={ticket} 
-                        mode={viewMode} 
-                        onDelete={() => onDelete(ticket.id)} 
-                        isActive={isActive} 
-                        isCompact={isCompact}
-                    >
-                        {children}
-                    </TicketCardContent>
-                </div>
-            )}
-        </Draggable>
-    );
-}
-
-function TicketCardContent({ ticket, children, isActive, isCompact, onDelete, mode }: any) {
-  // 🆕 Check urgency (deadline today or earlier)
-  const isUrgent = ticket.deadline && new Date(ticket.deadline).setHours(0,0,0,0) <= new Date().setHours(0,0,0,0);
-
-  // 🆕 Helper to render BPM range
-  const renderBPM = () => {
-    if (ticket.base_bpm && ticket.target_bpm) {
-      return <>{ticket.base_bpm} <FaLongArrowAltRight className="mx-0.5" /> {ticket.target_bpm}</>;
-    }
-    if (ticket.base_bpm) return <>{ticket.base_bpm}</>;
-    return null;
-  };
-
-  // --- COMPACT VIEW ---
-  if (mode === 'compact') {
-    return (
-      <div className={`relative group flex items-center gap-3 p-2 rounded bg-[#222] border border-[#333] hover:border-gray-500 transition-all ${isActive ? 'border-yellow-500/50 bg-[#2a2a22]' : ''}`}>
-        
-        {/* Avatar */}
-        <div className="w-6 h-6 rounded-full bg-gray-700 overflow-hidden shrink-0">
-             {ticket.profiles?.avatar_url ? <img src={ticket.profiles.avatar_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[8px] text-gray-400"><FaUser /></div>}
-        </div>
-
-        {/* Info */}
-        <div className="flex-1 min-w-0 flex flex-col">
-            {/* Clickable Title */}
-            <Link href={`/pages/admin/request/${ticket.id}`} className="text-xs font-bold text-white truncate leading-tight hover:text-blue-400 hover:underline">
-                {ticket.title}
-            </Link>
-
-            <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[9px] text-gray-500 truncate flex items-center gap-1">
-                    {isActive && <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"></span>}
-                    {ticket.profiles?.full_name}
-                </span>
-
-                {/* 🆕 Compact Metadata */}
-                {(ticket.base_bpm || ticket.target_bpm) && (
-                  <span className="text-[8px] text-gray-500 border border-[#444] px-1 rounded flex items-center gap-1">
-                    <FaTachometerAlt /> {renderBPM()}
-                  </span>
-                )}
-                {ticket.deadline && (
-                  <span className={`text-[8px] border border-[#444] px-1 rounded flex items-center gap-1 ${isUrgent ? 'text-red-400 border-red-900/50 bg-red-900/10' : 'text-gray-500'}`}>
-                    <FaCalendarAlt /> {new Date(ticket.deadline).toLocaleDateString(undefined, {month:'numeric', day:'numeric'})}
-                  </span>
-                )}
-            </div>
-        </div>
-
-        {!isCompact && <div className="shrink-0">{children}</div>}
-        <button onClick={onDelete} className="text-gray-600 hover:text-red-500 opacity-0 group-hover:opacity-100 px-1"><FaTimes size={10} /></button>
-      </div>
-    );
-  }
-
-  // --- DETAILED BOARD VIEW ---
-  return (
-    <div className={`relative group p-4 rounded-xl border transition-all ${isActive ? 'bg-[#2a2a2a] border-yellow-500 shadow-yellow-900/20 shadow-lg' : 'bg-[#222] border-[#333] hover:border-gray-500'}`}>
-      <button onClick={onDelete} className="absolute top-2 right-2 text-gray-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"><FaTrash size={10} /></button>
-      
-      {/* User Header */}
-      <div className="flex items-center gap-3 mb-3">
-        <div className="w-8 h-8 rounded-full bg-gray-700 overflow-hidden shrink-0 border border-[#444]">
-             {ticket.profiles?.avatar_url ? <img src={ticket.profiles.avatar_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400"><FaUser /></div>}
-        </div>
-        <div className="flex flex-col overflow-hidden">
-            {/* 🆕 LINK ADDED HERE */}
-            <Link 
-              href={`/pages/admin/user/${ticket.user_id}`}
-              className="text-xs text-gray-300 font-bold truncate hover:text-blue-400 hover:underline transition-all"
-              onClick={(e) => e.stopPropagation()} // Prevent drag conflict
-            >
-                {ticket.profiles?.full_name || "Unknown"}
-            </Link>
-            <span className="text-[10px] text-gray-600 font-mono">{new Date(ticket.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
-        </div>
-      </div>
-
-      {/* Title & Metadata Block */}
-      <div className="mb-3">
-        <Link href={`/pages/admin/request/${ticket.id}`} className={`block font-bold text-white flex items-start gap-2 hover:text-blue-400 transition-colors ${isCompact ? 'text-sm' : 'text-base'}`}>
-            <FaMusic className="text-blue-500 text-xs mt-1 shrink-0" />
-            <span className="leading-snug break-words">{ticket.title}</span>
-        </Link>
-        
-        {/* 🆕 DETAILED METADATA ROW */}
-        {!isCompact && (ticket.base_bpm || ticket.deadline) && (
-            <div className="mt-2 flex items-center gap-2 flex-wrap">
-                {(ticket.base_bpm || ticket.target_bpm) && (
-                    <span className="text-[10px] text-gray-400 bg-[#333] px-2 py-0.5 rounded-md flex items-center gap-1.5 font-mono">
-                        <FaTachometerAlt className="text-gray-500" /> {renderBPM()}
-                    </span>
-                )}
-                {ticket.deadline && (
-                    <span className={`text-[10px] px-2 py-0.5 rounded-md flex items-center gap-1.5 ${isUrgent ? 'bg-red-900/20 text-red-400 border border-red-900/50' : 'bg-[#333] text-gray-400'}`}>
-                        <FaCalendarAlt /> {new Date(ticket.deadline).toLocaleDateString()}
-                    </span>
-                )}
-            </div>
-        )}
-      </div>
-      
-      {!isCompact && <div className="mt-2 pt-3 border-t border-[#333]">{children}</div>}
-      {isCompact && children}
-    </div>
-  );
-}
-
-function ActionButton({ onClick, color, icon, label, mode }: any) {
-    if (mode === 'compact') {
-        return <button onClick={onClick} className={`p-1.5 rounded text-white ${color}`} title={label}>{icon}</button>;
-    }
-    return <button onClick={onClick} className={`w-full ${color} py-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors uppercase tracking-wide`}>{icon} {label}</button>;
 }
