@@ -20,14 +20,25 @@ export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
 
+  // Don't render navbar on the auth page
   if (pathname === "/auth") return null;
 
   useEffect(() => {
     fetchUser();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-      fetchUser();
+    
+    // Listen for auth changes (login/logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // If we just signed out, clear state immediately
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+      } else {
+        fetchUser();
+      }
     });
 
+    // Close dropdown when clicking outside
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false);
@@ -43,17 +54,33 @@ export default function Navbar() {
 
   async function fetchUser() {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      // 1. Get the Auth User
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+      // 🛑 CRITICAL FIX: If no user or error, stop here. 
+      // This prevents the 400 Bad Request and React Loop.
+      if (authError || !user) {
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+        return; 
+      }
+
       setUser(user);
 
-      if (user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", user.id)
-          .single();
+      // 2. Safely Fetch Profile
+      // We use .maybeSingle() instead of .single() so it returns null (instead of crashing) 
+      // if the profile row hasn't been created yet.
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (!profileError && profile) {
         setProfile(profile);
       }
+
     } catch (error) {
       console.error("Error fetching navbar data:", error);
     } finally {
@@ -62,14 +89,19 @@ export default function Navbar() {
   }
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    setIsDropdownOpen(false);
-    router.push("/auth");
-    setUser(null);
-    setProfile(null);
+    try {
+      await supabase.auth.signOut();
+      setIsDropdownOpen(false);
+      setUser(null);
+      setProfile(null);
+      router.push("/auth");
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
   };
 
   return (
+    // Sticky header: stays at top, pushes content down naturally
     <nav className="sticky top-0 w-full h-16 bg-[#121212] flex items-center justify-between px-6 z-50 border-b border-transparent">
       
       {/* LOGO */}
@@ -86,7 +118,7 @@ export default function Navbar() {
           <>
             {/* Create Ticket Button */}
             <Link 
-              href="/pages/request" 
+              href="/" 
               className="hidden md:flex items-center gap-2 bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all shadow-lg shadow-yellow-900/20"
             >
               Create a Ticket <FaTicketAlt />
@@ -112,8 +144,8 @@ export default function Navbar() {
                   <div className="p-4 border-b border-[#333] bg-[#252525]">
                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Signed in as</p>
                     <p className="text-sm font-bold text-white truncate">{profile?.full_name || "User"}</p>
-                    {/* 🛠️ FIX: Using user.email directly from auth object */}
-                    <p className="text-xs font-bold text-gray-400 truncate">{user?.email}</p>
+                    {/* Shows email directly from auth user object */}
+                    <p className="text-xs font-bold text-gray-400 truncate">{user.email}</p>
                   </div>
 
                   <div className="p-2 space-y-1">
