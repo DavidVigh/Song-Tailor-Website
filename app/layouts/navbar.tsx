@@ -11,6 +11,7 @@ import {
 } from "react-icons/fa";
 
 export default function Navbar() {
+  // 1. ALL HOOKS MUST BE DECLARED AT THE TOP
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -20,25 +21,23 @@ export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Don't render navbar on the auth page
-  if (pathname === "/auth") return null;
-
+  // 2. useEffects must always run, regardless of the page
   useEffect(() => {
-    fetchUser();
+    // Only fetch if we are NOT on the auth page to save resources
+    if (pathname !== "/auth") {
+      fetchUser();
+    }
     
-    // Listen for auth changes (login/logout)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      // If we just signed out, clear state immediately
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {
         setUser(null);
         setProfile(null);
         setLoading(false);
-      } else {
-        fetchUser();
+      } else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+        fetchUser(); // Refresh data on login
       }
     });
 
-    // Close dropdown when clicking outside
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false);
@@ -50,15 +49,12 @@ export default function Navbar() {
       subscription.unsubscribe();
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, []);
+  }, [pathname]); // Re-run if path changes (safe way)
 
   async function fetchUser() {
     try {
-      // 1. Get the Auth User
       const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-      // 🛑 CRITICAL FIX: If no user or error, stop here. 
-      // This prevents the 400 Bad Request and React Loop.
       if (authError || !user) {
         setUser(null);
         setProfile(null);
@@ -68,18 +64,13 @@ export default function Navbar() {
 
       setUser(user);
 
-      // 2. Safely Fetch Profile
-      // We use .maybeSingle() instead of .single() so it returns null (instead of crashing) 
-      // if the profile row hasn't been created yet.
-      const { data: profile, error: profileError } = await supabase
+      const { data: profile } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", user.id)
         .maybeSingle();
 
-      if (!profileError && profile) {
-        setProfile(profile);
-      }
+      if (profile) setProfile(profile);
 
     } catch (error) {
       console.error("Error fetching navbar data:", error);
@@ -89,19 +80,18 @@ export default function Navbar() {
   }
 
   const handleSignOut = async () => {
-    try {
-      await supabase.auth.signOut();
-      setIsDropdownOpen(false);
-      setUser(null);
-      setProfile(null);
-      router.push("/auth");
-    } catch (error) {
-      console.error("Error signing out:", error);
-    }
+    await supabase.auth.signOut();
+    setIsDropdownOpen(false);
+    setUser(null);
+    setProfile(null);
+    router.push("/auth");
   };
 
+  // 3. 🛑 NOW YOU CAN RETURN NULL (After all hooks are done)
+  if (pathname === "/auth") return null;
+
+  // 4. Render the Navbar
   return (
-    // Sticky header: stays at top, pushes content down naturally
     <nav className="sticky top-0 w-full h-16 bg-[#121212] flex items-center justify-between px-6 z-50 border-b border-transparent">
       
       {/* LOGO */}
@@ -144,7 +134,6 @@ export default function Navbar() {
                   <div className="p-4 border-b border-[#333] bg-[#252525]">
                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Signed in as</p>
                     <p className="text-sm font-bold text-white truncate">{profile?.full_name || "User"}</p>
-                    {/* Shows email directly from auth user object */}
                     <p className="text-xs font-bold text-gray-400 truncate">{user.email}</p>
                   </div>
 
