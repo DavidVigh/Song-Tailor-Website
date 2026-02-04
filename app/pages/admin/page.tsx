@@ -190,7 +190,7 @@ const DraggableCard = ({
                 {/* Tags */}
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   <span className="text-[10px] bg-black/50 text-gray-300 px-2 py-0.5 rounded border border-white/10 backdrop-blur-sm">
-                    {ticket.base_bpm || "?"} ➝ {ticket.target_bpm || "?"}
+                    {ticket.base_bpm || "?"} ➝ {ticket.target_bpm || "?"} BPM
                   </span>
                   {ticket.deadline && (
                     <span className="text-[10px] bg-black/50 text-gray-300 px-2 py-0.5 rounded border border-white/10 flex items-center gap-1 backdrop-blur-sm">
