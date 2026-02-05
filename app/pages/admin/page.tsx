@@ -21,10 +21,8 @@ import {
 } from "react-icons/fa";
 import { getYouTubeThumbnail } from "@/app/lib/utils";
 import Link from "next/link";
-// 🛠️ IMPORT THE NEW COMPONENTS
 import { CarouselThumbnail, BackgroundCarousel } from "@/app/components/TicketCarousels";
 
-// --- TYPES ---
 type Ticket = {
   id: number;
   user_id: string;
@@ -63,6 +61,9 @@ const DraggableCard = ({ ticket, index, col, handleDelete, advanceStatus }: any)
   const hasValidImage = thumbnails.length > 0 && !imgError;
   const extraLinksCount = Math.max(0, links.length - 1);
 
+  // Badge Logic
+  const isChoreo = (ticket.music_category || "").toLowerCase() === "choreo";
+
   return (
     <Draggable key={ticket.id} draggableId={ticket.id.toString()} index={index}>
       {(provided, snapshot) => (
@@ -77,14 +78,14 @@ const DraggableCard = ({ ticket, index, col, handleDelete, advanceStatus }: any)
             ${!hasValidImage ? "bg-[#1e1e1e]" : ""} 
           `}
         >
-          {/* 🖼️ LAYER 1: Background */}
+          {/* Background */}
           {hasValidImage && (
             hasMultipleImages ? (
-              <BackgroundCarousel images={thumbnails} />
+              <BackgroundCarousel images={thumbnails} blur="blur-none" />
             ) : (
               <>
                 <div
-                  className="absolute inset-0 z-0 bg-cover bg-center filter blur-sm scale-125 transition-opacity duration-300 opacity-80"
+                  className="absolute inset-0 z-0 bg-cover bg-center filter blur-none scale-110 opacity-30 transition-transform duration-500 group-hover:scale-125"
                   style={{ backgroundImage: `url('${mainCover}')` }}
                 />
                 <div className="absolute inset-0 z-0 bg-black/80 transition-opacity duration-300" />
@@ -92,19 +93,30 @@ const DraggableCard = ({ ticket, index, col, handleDelete, advanceStatus }: any)
             )
           )}
 
-          {/* 📦 LAYER 2: Content */}
+          {/* Content */}
           <div className="relative z-10 p-4">
             
-            {/* DELETE */}
+            {/* 🏷️ TYPE BADGE */}
+            <div className="absolute top-3 right-4 z-10 transition-opacity duration-200 group-hover:opacity-0">
+               <span className={`text-[10px] px-2 py-0.5 rounded border uppercase font-bold tracking-wider backdrop-blur-md shadow-sm
+                 ${isChoreo 
+                    ? 'bg-purple-500/20 text-purple-200 border-purple-500/50' 
+                    : 'bg-blue-500/20 text-blue-200 border-blue-500/50'}
+               `}>
+                 {ticket.music_category || "Dance Class"}
+               </span>
+            </div>
+
+            {/* Delete Button (On Hover) */}
             <button
               onClick={() => handleDelete(ticket.id)}
-              className="absolute top-0 right-0 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-20 p-2 hover:bg-black/50 rounded-bl-lg"
+              className="absolute top-0 right-0 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-20 p-2.5 hover:bg-black/50 rounded-bl-lg"
               title="Delete Ticket"
             >
               <FaTrash size={14} />
             </button>
 
-            {/* USER HEADER */}
+            {/* User Header */}
             <Link
               href={`/pages/admin/user/${ticket.user_id}?from=dashboard`}
               className="flex items-center gap-3 mb-3 hover:bg-black/30 p-2 -mx-2 -mt-2 rounded-lg transition-colors group/user"
@@ -126,10 +138,10 @@ const DraggableCard = ({ ticket, index, col, handleDelete, advanceStatus }: any)
               </div>
             </Link>
 
-            {/* SONG INFO */}
+            {/* Song Info */}
             <div className="flex items-start gap-3 mb-4">
               
-              {/* Thumbnail Box */}
+              {/* Thumbnail */}
               <div className="shrink-0 mt-0.5 relative w-12 h-12 rounded-lg overflow-hidden border border-white/20 shadow-md bg-black">
                 {hasValidImage ? (
                    hasMultipleImages ? (
@@ -169,7 +181,7 @@ const DraggableCard = ({ ticket, index, col, handleDelete, advanceStatus }: any)
               {/* Text Info */}
               <div className="min-w-0 flex-1">
                 <Link href={`/pages/admin/request/${ticket.id}`} className="group/title block">
-                  <h3 className="text-sm font-bold text-white truncate leading-tight mb-1 group-hover/title:text-blue-300 transition-colors drop-shadow-sm" title={ticket.title}>
+                  <h3 className="text-sm font-bold text-white truncate leading-tight mb-1 group-hover/title:text-blue-300 transition-colors drop-shadow-sm pr-16" title={ticket.title}>
                     {ticket.title}
                   </h3>
                 </Link>
@@ -187,7 +199,7 @@ const DraggableCard = ({ ticket, index, col, handleDelete, advanceStatus }: any)
               </div>
             </div>
 
-            {/* DESCRIPTION */}
+            {/* Description */}
             {ticket.description && (
                 <div className="mb-3 px-2 py-1.5 bg-black/20 rounded border border-white/5 flex gap-2 items-start">
                     <FaAlignLeft className="text-gray-500 text-[10px] mt-1 shrink-0" />
@@ -195,7 +207,7 @@ const DraggableCard = ({ ticket, index, col, handleDelete, advanceStatus }: any)
                 </div>
             )}
 
-            {/* ACTION BUTTON */}
+            {/* Action Button */}
             {col.id !== "done" && (
               <button
                 onClick={() => advanceStatus(ticket)}
@@ -297,17 +309,22 @@ export default function AdminPage() {
   if (!isAdmin) return null;
 
   return (
-    <div className="min-h-screen p-8 max-w-[1600px] mx-auto">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+    // 🛠️ RESPONSIVE CONTAINER: p-4 on mobile, p-8 on desktop
+    <div className="min-h-screen p-4 md:p-8 max-w-[1600px] mx-auto">
+      
+      {/* 🛠️ RESPONSIVE HEADER: Flex column on mobile, row on desktop */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-3">
           <span className="bg-red-600 text-xs px-2 py-1 rounded text-white font-bold tracking-wider">ADMIN</span> Dashboard
         </h1>
-        <Link href="/pages/admin/user" className="flex items-center gap-2 bg-[#252525] hover:bg-[#333] text-gray-200 border border-[#333] px-4 py-2 rounded-lg font-bold transition-all shadow-lg hover:shadow-xl hover:text-white">
+        <Link href="/pages/admin/user" className="flex items-center gap-2 bg-[#252525] hover:bg-[#333] text-gray-200 border border-[#333] px-4 py-2 rounded-lg font-bold transition-all shadow-lg hover:shadow-xl hover:text-white w-full sm:w-auto justify-center">
           <FaUsers className="text-blue-500" /> List Users
         </Link>
       </div>
+
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* 🛠️ RESPONSIVE GRID: 1 col (mobile), 2 cols (tablet), 4 cols (desktop) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
           {columns.map((col) => (
             <div key={col.id} className="flex flex-col h-full">
               <div className={`flex items-center justify-between px-4 py-3 mb-4 rounded-lg border-t-4 bg-[#1e1e1e] ${col.border}`}>
