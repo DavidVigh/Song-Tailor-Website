@@ -1,19 +1,20 @@
-export const getYouTubeThumbnail = (url: string | null | undefined) => {
+export function getYouTubeThumbnail(url: string | string[] | null | undefined) {
   if (!url) return null;
 
-  // Regular expression to handle various YouTube link formats:
-  // - youtube.com/watch?v=ID
-  // - youtu.be/ID
-  // - youtube.com/embed/ID
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-  const match = url.match(regExp);
+  // Helper function for a single string
+  const getSingle = (singleUrl: string) => {
+    if (typeof singleUrl !== "string") return null;
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = singleUrl.match(regExp);
+    return (match && match[2].length === 11) 
+      ? `https://img.youtube.com/vi/${match[2]}/hqdefault.jpg` 
+      : null;
+  };
 
-  // If we find a match and the ID is 11 characters (standard YouTube ID length)
-  if (match && match[2].length === 11) {
-    // 'mqdefault.jpg' is 320x180 (Medium Quality) - perfect for cards
-    // 'hqdefault.jpg' is 480x360 (High Quality) - if you want it sharper
-    return `https://img.youtube.com/vi/${match[2]}/mqdefault.jpg`;
+  // 🛡️ Logic: If Array, map it. If String, process it.
+  if (Array.isArray(url)) {
+    return url.map(u => getSingle(u)).filter(Boolean) as string[];
   }
 
-  return null;
-};
+  return getSingle(url);
+}
