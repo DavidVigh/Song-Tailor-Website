@@ -13,13 +13,14 @@ import {
   FaHourglassHalf 
 } from "react-icons/fa";
 import { getYouTubeThumbnail } from "@/app/lib/utils";
+// 🛠️ IMPORT THE NEW COMPONENTS
+import { CarouselThumbnail, BackgroundCarousel } from "@/app/components/TicketCarousels";
 
-// --- TYPES (Fixes Build Errors) ---
 type Ticket = {
   id: number;
   user_id: string;
   title: string;
-  youtube_link: string | string[]; // Handles both single string or array
+  youtube_link: string | string[];
   base_bpm: string;
   target_bpm: string;
   music_category: string;
@@ -29,144 +30,16 @@ type Ticket = {
   description?: string;
 };
 
-// --- 🎠 SUB-COMPONENT: Foreground Thumbnail Carousel (Infinite Loop) ---
-const CarouselThumbnail = ({ images }: { images: string[] }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isTransitioning, setIsTransitioning] = useState(true);
-  
-  // Clone first image to end for seamless loop
-  const extendedImages = [...images, images[0]];
-
-  useEffect(() => {
-    if (images.length <= 1) return;
-
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => prev + 1);
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [images.length]);
-
-  // Handle the infinite loop reset
-  useEffect(() => {
-    if (currentIndex === images.length) {
-      const timeout = setTimeout(() => {
-        setIsTransitioning(false); 
-        setCurrentIndex(0); 
-      }, 700); 
-      return () => clearTimeout(timeout);
-    }
-    
-    if (currentIndex === 0) {
-      const timeout = setTimeout(() => {
-        setIsTransitioning(true);
-      }, 50);
-      return () => clearTimeout(timeout);
-    }
-  }, [currentIndex, images.length]);
-
-  return (
-    <div className="relative w-full h-full overflow-hidden bg-black">
-      <div 
-        className="flex h-full"
-        style={{ 
-          transform: `translateX(-${currentIndex * 100}%)`,
-          transition: isTransitioning ? 'transform 700ms ease-in-out' : 'none'
-        }}
-      >
-        {extendedImages.map((img, i) => (
-          <div key={i} className="w-full h-full shrink-0">
-            <img src={img} alt={`slide-${i}`} className="w-full h-full object-cover" />
-          </div>
-        ))}
-      </div>
-      
-      {/* Dots (Only show for real images) */}
-      <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 z-10">
-        {images.map((_, i) => (
-          <div 
-            key={i} 
-            className={`h-1.5 rounded-full transition-all duration-300 shadow-sm
-              ${(currentIndex % images.length) === i ? 'w-4 bg-white' : 'w-1.5 bg-white/40'}
-            `}
-          />
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// --- 🌫️ SUB-COMPONENT: Background Blurry Carousel (Infinite Loop) ---
-const BackgroundCarousel = ({ images }: { images: string[] }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isTransitioning, setIsTransitioning] = useState(true);
-  const extendedImages = [...images, images[0]];
-
-  useEffect(() => {
-    if (images.length <= 1) return;
-
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => prev + 1);
-    }, 3000); 
-
-    return () => clearInterval(interval);
-  }, [images.length]);
-
-  useEffect(() => {
-    if (currentIndex === images.length) {
-      const timeout = setTimeout(() => {
-        setIsTransitioning(false);
-        setCurrentIndex(0);
-      }, 700);
-      return () => clearTimeout(timeout);
-    }
-    if (currentIndex === 0) {
-      const timeout = setTimeout(() => {
-        setIsTransitioning(true);
-      }, 50);
-      return () => clearTimeout(timeout);
-    }
-  }, [currentIndex, images.length]);
-
-  return (
-    <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-      <div 
-        className="flex h-full w-full"
-        style={{ 
-          transform: `translateX(-${currentIndex * 100}%)`,
-          transition: isTransitioning ? 'transform 700ms ease-in-out' : 'none'
-        }}
-      >
-        {extendedImages.map((img, i) => (
-          <div key={i} className="w-full h-full shrink-0 relative">
-             <div 
-               className="absolute inset-0 bg-cover bg-center filter blur-md scale-110 opacity-50"
-               style={{ backgroundImage: `url('${img}')` }}
-             />
-             <div className="absolute inset-0 bg-black/80" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// --- MAIN COMPONENT ---
 export default function MyTicketsPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  useEffect(() => {
-    fetchMyTickets();
-  }, []);
+  useEffect(() => { fetchMyTickets(); }, []);
 
   async function fetchMyTickets() {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      router.push("/auth");
-      return;
-    }
+    if (!user) { router.push("/auth"); return; }
 
     const { data, error } = await supabase
       .from("song_requests")
@@ -174,11 +47,8 @@ export default function MyTicketsPage() {
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error(error);
-    } else {
-      setTickets((data as Ticket[]) || []);
-    }
+    if (error) console.error(error);
+    else setTickets((data as Ticket[]) || []);
     
     setLoading(false);
   }
@@ -266,7 +136,7 @@ export default function MyTicketsPage() {
                     <div className="shrink-0 w-full sm:w-40 aspect-video rounded-lg overflow-hidden border border-white/10 shadow-lg bg-black relative group/thumb">
                       {thumbnails.length > 0 ? (
                         hasMultipleImages ? (
-                          <CarouselThumbnail images={thumbnails} />
+                          <CarouselThumbnail images={thumbnails} showIndicators={true} />
                         ) : (
                           <div className="w-full h-full relative">
                              <img 
