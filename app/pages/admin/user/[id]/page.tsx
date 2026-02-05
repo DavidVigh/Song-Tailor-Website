@@ -228,7 +228,7 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
               </div>
             </div>
 
-            {/* 🛠️ SOCIAL MEDIA (Fixed Layout: Single Row, No Wrap) */}
+            {/* Social Media */}
             {(profile.facebook_link || profile.instagram_link) ? (
               <div className="flex items-center gap-3 bg-[#252525] p-3 rounded-lg border border-[#333] overflow-hidden">
                 <div className="bg-[#333] p-2 rounded text-gray-400 shrink-0"><FaGlobe size={14} /></div>
@@ -265,11 +265,13 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
         <FaMusic className="text-blue-500" /> Request History
       </h2>
 
-      {/* 🛠️ RESPONSIVE GRID LAYOUT FOR HISTORY CARDS */}
+      {/* REQUEST HISTORY GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {tickets.map((ticket) => {
+          // 🛠️ SAFE THUMBNAIL LOGIC
           const links = Array.isArray(ticket.youtube_link) ? ticket.youtube_link : (ticket.youtube_link ? [ticket.youtube_link] : []);
           const rawThumbnails = getYouTubeThumbnail(links);
+          // Ensure thumbnails is always an array of strings
           const thumbnails = Array.isArray(rawThumbnails) ? rawThumbnails : (rawThumbnails ? [rawThumbnails] : []);
           
           const hasMultipleImages = thumbnails.length > 1;
@@ -280,10 +282,9 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
                 key={ticket.id} 
                 className="relative overflow-hidden rounded-xl border border-[#333] shadow-lg group hover:border-gray-500 transition-all duration-300 flex flex-col h-full"
               >
-                {/* 🎨 LAYER 1: Background (No Blur) */}
+                {/* Background */}
                 {thumbnails.length > 0 ? (
                   hasMultipleImages ? (
-                    // 🎠 Carousel with blur-none
                     <BackgroundCarousel images={thumbnails} blur="blur-none" />
                   ) : (
                     <>
@@ -298,10 +299,10 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
                   <div className="absolute inset-0 z-0 bg-[#1e1e1e]" />
                 )}
 
-                {/* 📦 LAYER 2: Content */}
+                {/* Content */}
                 <div className="relative z-10 p-5 flex flex-col h-full">
                   
-                  {/* Header: Title & Status */}
+                  {/* Header */}
                   <div className="flex justify-between items-start mb-4">
                     <Link href={`/pages/admin/request/${ticket.id}`} className="hover:underline decoration-blue-500 min-w-0 pr-2">
                       <h2 className="text-lg font-bold text-white leading-tight drop-shadow-md truncate">
@@ -323,10 +324,8 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
                     </span>
                   </div>
 
-                  {/* Body: Thumbnail & Meta */}
+                  {/* Body */}
                   <div className="flex gap-4 mb-4 items-start">
-                    
-                    {/* Thumbnail Container */}
                     <div className="shrink-0 w-28 aspect-video rounded-lg overflow-hidden border border-white/10 shadow-lg bg-black relative group/thumb">
                       {thumbnails.length > 0 ? (
                         hasMultipleImages ? (
@@ -350,7 +349,6 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
                       )}
                     </div>
 
-                    {/* Meta Info */}
                     <div className="flex-1 space-y-2 min-w-0">
                        <div className="flex items-center gap-2">
                           <span className={`px-2 py-0.5 rounded text-[10px] border tracking-wide font-bold shadow-sm truncate
