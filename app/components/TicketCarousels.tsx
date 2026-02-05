@@ -9,7 +9,8 @@ interface CarouselProps {
   images: string[];
   slideDuration?: number;
   animationDuration?: number;
-  showIndicators?: boolean; // 👈 New Prop
+  showIndicators?: boolean;
+  blur?: string; // 👈 New Prop (e.g., "blur-sm", "blur-none")
 }
 
 // 🖼️ 1. Thumbnail Carousel (Sliding)
@@ -17,12 +18,11 @@ export const CarouselThumbnail = ({
   images, 
   slideDuration = DEFAULT_SLIDE_DURATION,
   animationDuration = DEFAULT_ANIMATION_DURATION,
-  showIndicators = false // Default to false
+  showIndicators = false 
 }: CarouselProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(true);
   
-  // Clone first image to end for seamless loop
   const extendedImages = useMemo(() => [...images, images[0]], [images]);
 
   useEffect(() => {
@@ -51,7 +51,6 @@ export const CarouselThumbnail = ({
 
   return (
     <div className="relative w-full h-full overflow-hidden bg-black">
-      {/* Slides */}
       <div 
         className="flex h-full"
         style={{ 
@@ -67,11 +66,9 @@ export const CarouselThumbnail = ({
         ))}
       </div>
 
-      {/* 🔴 INDICATORS (Dots) */}
       {showIndicators && (
         <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 z-20 pointer-events-none">
           {images.map((_, i) => {
-            // Calculate active index correctly accounting for the clone
             const isActive = (currentIndex % images.length) === i;
             return (
               <div 
@@ -91,7 +88,8 @@ export const CarouselThumbnail = ({
 // 🌫️ 2. Background Carousel (Cross-Fade)
 export const BackgroundCarousel = ({ 
   images, 
-  slideDuration = DEFAULT_SLIDE_DURATION 
+  slideDuration = DEFAULT_SLIDE_DURATION,
+  blur = "blur-sm" // 👈 Default blur
 }: CarouselProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -113,7 +111,7 @@ export const BackgroundCarousel = ({
           }`}
         >
           <div 
-            className="absolute inset-0 bg-cover bg-center filter blur-md scale-110 opacity-60"
+            className={`absolute inset-0 bg-cover bg-center scale-110 opacity-70 ${blur}`} // 👈 Applied here
             style={{ backgroundImage: `url('${img}')` }}
           />
           <div className="absolute inset-0 bg-black/80" />
