@@ -1,15 +1,16 @@
 "use client";
 import { useEffect, useState, use } from "react"; 
 import { supabase } from "@/lib/supabase";
-import { useRouter, useSearchParams } from "next/navigation"; // 👈 Added useSearchParams
+import { useRouter, useSearchParams } from "next/navigation"; 
 import Link from "next/link";
 import { 
   FaUser, FaArrowLeft, FaFacebook, FaInstagram, FaPhone, 
-  FaMusic, FaClock, FaEdit, FaTimes, FaSave, FaGlobe, FaUserShield 
+  FaMusic, FaClock, FaEdit, FaTimes, FaSave, FaGlobe, FaUserShield, 
+  FaYoutube, FaAlignLeft, FaCheckCircle, FaPlay, FaHourglassHalf 
 } from "react-icons/fa";
 import { getYouTubeThumbnail } from "@/app/lib/utils";
+import { CarouselThumbnail, BackgroundCarousel } from "@/app/components/TicketCarousels";
 
-// ... (Types stay the same) ...
 type Profile = {
   id: string;
   full_name: string;
@@ -23,29 +24,29 @@ type Profile = {
 type Ticket = {
   id: number;
   title: string;
-  youtube_link: string;
+  youtube_link: string | string[];
   status: "new" | "queue" | "in progress" | "done";
   created_at: string;
   base_bpm: string;
   target_bpm: string;
   deadline: string;
+  music_category: string;
+  description?: string;
 };
 
 export default function AdminUserPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
-  const searchParams = useSearchParams(); // 👈 Get URL params
+  const searchParams = useSearchParams(); 
   const { id } = use(params);
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 🛠️ DYNAMIC BACK BUTTON LOGIC
   const fromSource = searchParams.get("from");
   const backLink = fromSource === "list" ? "/pages/admin/user" : "/pages/admin";
   const backText = fromSource === "list" ? "Back to User List" : "Back to Dashboard";
 
-  // ... (Rest of state: showModal, formData, etc.) ...
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
@@ -156,27 +157,27 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
   if (!profile) return <div className="p-10 text-center text-white">User not found.</div>;
 
   return (
-    <div className="min-h-screen p-8 max-w-5xl mx-auto relative">
+    <div className="min-h-screen p-4 sm:p-8 max-w-7xl mx-auto relative">
       
-      {/* 🔙 DYNAMIC BACK BUTTON */}
+      {/* 🔙 BACK BUTTON */}
       <Link href={backLink} className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors">
         <FaArrowLeft size={14} /> {backText}
       </Link>
 
       {/* 👤 PERSONAL DATA CARD */}
-      <div className="bg-[#1e1e1e] border border-[#333] rounded-2xl p-8 mb-8 shadow-xl flex flex-col md:flex-row items-start gap-8 relative group/card">
+      <div className="bg-[#1e1e1e] border border-[#333] rounded-2xl p-6 sm:p-8 mb-8 shadow-xl flex flex-col md:flex-row items-start gap-8 relative group/card">
         
         {/* EDIT BUTTON */}
         <button 
             onClick={openEditModal}
-            className="absolute top-6 right-6 text-gray-500 hover:text-blue-400 transition-colors p-2 bg-[#252525] rounded-lg border border-[#333] hover:border-blue-500/50 opacity-0 group-hover/card:opacity-100"
+            className="absolute top-4 right-4 sm:top-6 sm:right-6 text-gray-500 hover:text-blue-400 transition-colors p-2 bg-[#252525] rounded-lg border border-[#333] hover:border-blue-500/50 opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100"
             title="Edit Profile"
         >
             <FaEdit size={16} />
         </button>
 
         {/* Avatar */}
-        <div className="w-28 h-28 rounded-full overflow-hidden bg-[#252525] border-4 border-[#333] shrink-0 shadow-lg mt-2">
+        <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden bg-[#252525] border-4 border-[#333] shrink-0 shadow-lg mt-2 mx-auto md:mx-0">
           {profile.avatar_url ? (
             <img src={profile.avatar_url} alt={profile.full_name} className="w-full h-full object-cover" />
           ) : (
@@ -187,10 +188,11 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
         </div>
 
         {/* User Details */}
-        <div className="flex-1 w-full">
-          <div className="flex justify-between items-start">
+        <div className="flex-1 w-full text-center md:text-left">
+          {/* Header & Stats */}
+          <div className="flex flex-col md:flex-row justify-between items-center md:items-start gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-white mb-2">{profile.full_name || "Unnamed User"}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">{profile.full_name || "Unnamed User"}</h1>
               
               <span className={`px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider border
                 ${profile.role === 'admin' 
@@ -215,7 +217,9 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+          {/* Contact Info Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 text-left">
+            {/* Phone */}
             <div className="flex items-center gap-3 bg-[#252525] p-3 rounded-lg border border-[#333]">
               <div className="bg-[#333] p-2 rounded text-gray-400"><FaPhone size={14} /></div>
               <div>
@@ -224,18 +228,28 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
               </div>
             </div>
 
+            {/* 🛠️ SOCIAL MEDIA (Fixed Layout: Single Row, No Wrap) */}
             {(profile.facebook_link || profile.instagram_link) ? (
-              <div className="flex items-center gap-3 bg-[#252525] p-3 rounded-lg border border-[#333]">
-                <div className="bg-[#333] p-2 rounded text-gray-400"><FaGlobe size={14} /></div>
-                <div className="flex gap-2">
+              <div className="flex items-center gap-3 bg-[#252525] p-3 rounded-lg border border-[#333] overflow-hidden">
+                <div className="bg-[#333] p-2 rounded text-gray-400 shrink-0"><FaGlobe size={14} /></div>
+                
+                <div className="flex w-full gap-2">
                   {profile.facebook_link && (
-                    <a href={profile.facebook_link} target="_blank" className="flex items-center gap-2 bg-[#1877F2] hover:bg-[#166fe5] text-white px-3 py-1.5 rounded text-xs font-bold transition-colors">
-                      <FaFacebook /> Facebook
+                    <a 
+                      href={profile.facebook_link} 
+                      target="_blank" 
+                      className="flex-1 flex items-center justify-center gap-2 bg-[#1877F2] hover:bg-[#166fe5] text-white px-2 py-1.5 rounded text-xs font-bold transition-colors truncate min-w-0"
+                    >
+                      <FaFacebook className="shrink-0" /> <span className="truncate">Facebook</span>
                     </a>
                   )}
                   {profile.instagram_link && (
-                    <a href={profile.instagram_link} target="_blank" className="flex items-center gap-2 bg-gradient-to-tr from-[#FFDC80] via-[#FD1D1D] to-[#C13584] hover:opacity-90 text-white px-3 py-1.5 rounded text-xs font-bold transition-opacity">
-                      <FaInstagram /> Instagram
+                    <a 
+                      href={profile.instagram_link} 
+                      target="_blank" 
+                      className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-tr from-[#FFDC80] via-[#FD1D1D] to-[#C13584] hover:opacity-90 text-white px-2 py-1.5 rounded text-xs font-bold transition-opacity truncate min-w-0"
+                    >
+                      <FaInstagram className="shrink-0" /> <span className="truncate">Instagram</span>
                     </a>
                   )}
                 </div>
@@ -251,47 +265,143 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
         <FaMusic className="text-blue-500" /> Request History
       </h2>
 
-      <div className="space-y-4">
+      {/* 🛠️ RESPONSIVE GRID LAYOUT FOR HISTORY CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {tickets.map((ticket) => {
-          const thumbnail = getYouTubeThumbnail(ticket.youtube_link);
+          const links = Array.isArray(ticket.youtube_link) ? ticket.youtube_link : (ticket.youtube_link ? [ticket.youtube_link] : []);
+          const rawThumbnails = getYouTubeThumbnail(links);
+          const thumbnails = Array.isArray(rawThumbnails) ? rawThumbnails : (rawThumbnails ? [rawThumbnails] : []);
+          
+          const hasMultipleImages = thumbnails.length > 1;
+          const mainCover = thumbnails[0] || "";
+
           return (
-            <div key={ticket.id} className="bg-[#1e1e1e] border border-[#333] p-4 rounded-xl flex items-center gap-4 hover:border-gray-500 transition-colors group">
-              <div className="shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-[#2a2a2a] border border-[#444] relative">
-                {thumbnail ? (
-                  <img src={thumbnail} alt="Song" className="w-full h-full object-cover opacity-80 group-hover:opacity-100" />
+              <div 
+                key={ticket.id} 
+                className="relative overflow-hidden rounded-xl border border-[#333] shadow-lg group hover:border-gray-500 transition-all duration-300 flex flex-col h-full"
+              >
+                {/* 🎨 LAYER 1: Background (No Blur) */}
+                {thumbnails.length > 0 ? (
+                  hasMultipleImages ? (
+                    // 🎠 Carousel with blur-none
+                    <BackgroundCarousel images={thumbnails} blur="blur-none" />
+                  ) : (
+                    <>
+                      <div 
+                        className="absolute inset-0 z-0 bg-cover bg-center filter blur-none scale-110 opacity-30 transition-transform duration-500 group-hover:scale-125"
+                        style={{ backgroundImage: `url('${mainCover}')` }}
+                      />
+                      <div className="absolute inset-0 z-0 bg-black/80" />
+                    </>
+                  )
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-500"><FaMusic /></div>
+                  <div className="absolute inset-0 z-0 bg-[#1e1e1e]" />
                 )}
-              </div>
-              <div className="flex-1">
-                <Link href={`/pages/admin/request/${ticket.id}`} className="hover:underline decoration-blue-500 font-bold text-white text-lg">
-                  {ticket.title}
-                </Link>
-                <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
-                  <span className={`px-2 py-0.5 rounded border uppercase font-bold tracking-wider
-                    ${ticket.status === 'done' ? 'bg-green-900/20 text-green-400 border-green-800' : 
-                      ticket.status === 'in progress' ? 'bg-yellow-900/20 text-yellow-400 border-yellow-800' :
-                      'bg-[#252525] text-gray-400 border-[#333]'}
-                  `}>
-                    {ticket.status}
-                  </span>
-                  <span className="flex items-center gap-1"><FaClock size={10} /> {new Date(ticket.created_at).toLocaleDateString()}</span>
+
+                {/* 📦 LAYER 2: Content */}
+                <div className="relative z-10 p-5 flex flex-col h-full">
+                  
+                  {/* Header: Title & Status */}
+                  <div className="flex justify-between items-start mb-4">
+                    <Link href={`/pages/admin/request/${ticket.id}`} className="hover:underline decoration-blue-500 min-w-0 pr-2">
+                      <h2 className="text-lg font-bold text-white leading-tight drop-shadow-md truncate">
+                        {ticket.title}
+                      </h2>
+                    </Link>
+                    
+                    <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider border flex items-center gap-1.5 shadow-sm shrink-0
+                      ${ticket.status === 'done' ? 'bg-green-600 text-white border-green-400' : 
+                        ticket.status === 'in progress' ? 'bg-yellow-600 text-white border-yellow-400' :
+                        ticket.status === 'queue' ? 'bg-blue-600 text-white border-blue-400' :
+                        'bg-gray-700 text-gray-300 border-gray-500'}
+                    `}>
+                      {ticket.status === 'done' && <FaCheckCircle />}
+                      {ticket.status === 'in progress' && <FaPlay size={8} />}
+                      {ticket.status === 'queue' && <FaHourglassHalf size={8} />}
+                      {ticket.status === 'new' && "NEW"}
+                      {ticket.status !== 'new' && ticket.status}
+                    </span>
+                  </div>
+
+                  {/* Body: Thumbnail & Meta */}
+                  <div className="flex gap-4 mb-4 items-start">
+                    
+                    {/* Thumbnail Container */}
+                    <div className="shrink-0 w-28 aspect-video rounded-lg overflow-hidden border border-white/10 shadow-lg bg-black relative group/thumb">
+                      {thumbnails.length > 0 ? (
+                        hasMultipleImages ? (
+                          <CarouselThumbnail images={thumbnails} showIndicators={false} />
+                        ) : (
+                          <div className="w-full h-full relative">
+                             <img 
+                               src={thumbnails[0]} 
+                               className="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform duration-500" 
+                               alt="thumb"
+                             />
+                             <div className="absolute inset-0 bg-black/10 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity">
+                                <FaYoutube className="text-red-500 drop-shadow-lg scale-125" />
+                             </div>
+                          </div>
+                        )
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-500">
+                          <FaMusic size={24} />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Meta Info */}
+                    <div className="flex-1 space-y-2 min-w-0">
+                       <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded text-[10px] border tracking-wide font-bold shadow-sm truncate
+                            ${(ticket.music_category || "").toLowerCase() === 'choreo' 
+                               ? 'bg-purple-900/40 text-purple-200 border-purple-700' 
+                               : 'bg-blue-900/40 text-blue-200 border-blue-700'}
+                          `}>
+                            {ticket.music_category || "Dance Class"}
+                          </span>
+                       </div>
+                       
+                       <div className="text-xs text-gray-300 truncate">
+                          <span className="text-gray-500 font-bold uppercase tracking-wider">BPM:</span> 
+                          <span className="ml-1 font-mono text-white">{ticket.base_bpm || "?"} ➝ {ticket.target_bpm || "?"}</span>
+                       </div>
+
+                       {ticket.deadline && (
+                         <div className="text-[10px] text-yellow-500/90 flex items-center gap-1 font-medium bg-yellow-500/10 px-1.5 py-0.5 rounded w-fit border border-yellow-500/20">
+                            <FaClock size={9} /> 
+                            {new Date(ticket.deadline).toLocaleDateString()}
+                         </div>
+                       )}
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  {ticket.description && (
+                    <div className="mt-auto pt-3 border-t border-white/5">
+                      <div className="flex items-start gap-2 text-xs text-gray-300 bg-black/20 p-2.5 rounded-lg border border-white/5">
+                        <FaAlignLeft className="mt-0.5 text-gray-500 shrink-0" />
+                        <p className="line-clamp-2 leading-relaxed opacity-90">{ticket.description}</p>
+                      </div>
+                    </div>
+                  )}
+
                 </div>
               </div>
-            </div>
           );
         })}
-         {tickets.length === 0 && (
-           <div className="text-center py-12 text-gray-500 bg-[#1e1e1e] rounded-xl border border-[#333] border-dashed">
-             This user hasn't requested any songs yet.
-           </div>
-        )}
       </div>
+      
+      {tickets.length === 0 && (
+         <div className="text-center py-12 text-gray-500 bg-[#1e1e1e] rounded-xl border border-[#333] border-dashed">
+           This user hasn't requested any songs yet.
+         </div>
+      )}
 
+      {/* EDIT MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#1e1e1e] border border-[#333] w-full max-w-md rounded-2xl p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200">
-            
             <button 
               onClick={() => setShowModal(false)}
               className="absolute top-4 right-4 text-gray-500 hover:text-white"
@@ -304,7 +414,6 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
             </h2>
 
             <div className="space-y-4">
-              
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">User Role</label>
                 <div className="relative">
@@ -318,9 +427,6 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
                       <option value="admin">Admin</option>
                     </select>
                 </div>
-                <p className="text-[10px] text-gray-500 mt-1 pl-1">
-                  Admins have full access to the dashboard and user management.
-                </p>
               </div>
 
               <div>
