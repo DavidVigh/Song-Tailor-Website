@@ -6,11 +6,12 @@ import Link from "next/link";
 import { 
   FaUser, FaArrowLeft, FaFacebook, FaInstagram, FaPhone, 
   FaMusic, FaClock, FaEdit, FaTimes, FaSave, FaGlobe, FaUserShield, 
-  FaYoutube, FaAlignLeft, FaCheckCircle, FaPlay, FaHourglassHalf 
+  FaYoutube, FaAlignLeft, FaCheckCircle, FaPlay, FaHourglassHalf,
+  FaCheck, FaCheckDouble, FaLongArrowAltRight
 } from "react-icons/fa";
 import { getYouTubeThumbnail } from "@/app/lib/utils";
 import { CarouselThumbnail, BackgroundCarousel } from "@/app/components/TicketCarousels";
-import { useToast } from "@/app/context/ToastContext"; // 👈 Import Hook
+import { useToast } from "@/app/context/ToastContext"; 
 
 type Profile = {
   id: string;
@@ -39,7 +40,7 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
   const router = useRouter();
   const searchParams = useSearchParams(); 
   const { id } = use(params);
-  const { showToast } = useToast(); // 👈 Use Hook
+  const { showToast } = useToast(); 
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -141,19 +142,28 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
 
     if (error) {
       console.error("Update failed:", error);
-      showToast("Error saving changes: " + error.message, "error"); // 👈 Use Toast
+      showToast("Error saving changes: " + error.message, "error"); 
     } else {
       setProfile({ 
         ...profile, 
         phone: formData.phone, 
         facebook_link: finalFB, 
-        instagram_link: finalInsta,
+        instagram_link: finalInsta, 
         role: formData.role 
       });
-      showToast("Profile updated successfully!", "success"); // 👈 Use Toast
+      showToast("Profile updated successfully!", "success"); 
       setShowModal(false);
     }
     setSaving(false);
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'accepted': return <span className="bg-blue-900/50 text-blue-200 border border-blue-500/30 px-2 py-0.5 rounded text-[10px] font-bold uppercase flex items-center gap-1"><FaCheck size={8} /> Queue</span>;
+      case 'in progress': return <span className="bg-yellow-900/50 text-yellow-200 border border-yellow-500/30 px-2 py-0.5 rounded text-[10px] font-bold uppercase flex items-center gap-1"><FaPlay size={8} /> Mixing</span>;
+      case 'completed': return <span className="bg-green-900/50 text-green-200 border border-green-500/30 px-2 py-0.5 rounded text-[10px] font-bold uppercase flex items-center gap-1"><FaCheckDouble size={8} /> Done</span>;
+      default: return <span className="bg-gray-800 text-gray-400 border border-gray-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase flex items-center gap-1"><FaClock size={8} /> New</span>;
+    }
   };
 
   if (loading) return <div className="p-10 text-center text-white">Loading Profile...</div>;
@@ -203,7 +213,7 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
                   : 'bg-blue-900/30 text-blue-400 border-blue-800'
                 }
               `}>
-                 {profile.role}
+                  {profile.role}
               </span>
             </div>
             
@@ -274,7 +284,6 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
           // 🛠️ SAFE THUMBNAIL LOGIC
           const links = Array.isArray(ticket.youtube_link) ? ticket.youtube_link : (ticket.youtube_link ? [ticket.youtube_link] : []);
           const rawThumbnails = getYouTubeThumbnail(links);
-          // Ensure thumbnails is always an array of strings
           const thumbnails = Array.isArray(rawThumbnails) ? rawThumbnails : (rawThumbnails ? [rawThumbnails] : []);
           
           const hasMultipleImages = thumbnails.length > 1;
@@ -307,7 +316,7 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
                   
                   {/* Header */}
                   <div className="flex justify-between items-start mb-4">
-                    <Link href={`/pages/admin/request/${ticket.id}`} className="hover:underline decoration-blue-500 min-w-0 pr-2">
+                    <Link href={`/pages/request/${ticket.id}`} className="hover:underline decoration-blue-500 min-w-0 pr-2">
                       <h2 className="text-lg font-bold text-white leading-tight drop-shadow-md truncate">
                         {ticket.title}
                       </h2>
@@ -332,7 +341,8 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
                     <div className="shrink-0 w-28 aspect-video rounded-lg overflow-hidden border border-white/10 shadow-lg bg-black relative group/thumb">
                       {thumbnails.length > 0 ? (
                         hasMultipleImages ? (
-                          <CarouselThumbnail images={thumbnails} showIndicators={false} />
+                          // ✅ CHANGED: showIndicators={true} shows the progression dots
+                          <CarouselThumbnail images={thumbnails} showIndicators={true} />
                         ) : (
                           <div className="w-full h-full relative">
                              <img 
@@ -353,7 +363,7 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
                     </div>
 
                     <div className="flex-1 space-y-2 min-w-0">
-                       <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2">
                           <span className={`px-2 py-0.5 rounded text-[10px] border tracking-wide font-bold shadow-sm truncate
                             ${(ticket.music_category || "").toLowerCase() === 'choreo' 
                                ? 'bg-purple-900/40 text-purple-200 border-purple-700' 
@@ -361,31 +371,23 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
                           `}>
                             {ticket.music_category || "Dance Class"}
                           </span>
-                       </div>
-                       
-                       <div className="text-xs text-gray-300 truncate">
+                        </div>
+                        
+                        <div className="text-xs text-gray-300 truncate">
                           <span className="text-gray-500 font-bold uppercase tracking-wider">BPM:</span> 
                           <span className="ml-1 font-mono text-white">{ticket.base_bpm || "?"} ➝ {ticket.target_bpm || "?"}</span>
-                       </div>
+                        </div>
 
-                       {ticket.deadline && (
-                         <div className="text-[10px] text-yellow-500/90 flex items-center gap-1 font-medium bg-yellow-500/10 px-1.5 py-0.5 rounded w-fit border border-yellow-500/20">
+                        {ticket.deadline && (
+                          <div className="text-[10px] text-yellow-500/90 flex items-center gap-1 font-medium bg-yellow-500/10 px-1.5 py-0.5 rounded w-fit border border-yellow-500/20">
                             <FaClock size={9} /> 
                             {new Date(ticket.deadline).toLocaleDateString()}
-                         </div>
-                       )}
+                          </div>
+                        )}
                     </div>
                   </div>
 
-                  {/* Description */}
-                  {ticket.description && (
-                    <div className="mt-auto pt-3 border-t border-white/5">
-                      <div className="flex items-start gap-2 text-xs text-gray-300 bg-black/20 p-2.5 rounded-lg border border-white/5">
-                        <FaAlignLeft className="mt-0.5 text-gray-500 shrink-0" />
-                        <p className="line-clamp-2 leading-relaxed opacity-90">{ticket.description}</p>
-                      </div>
-                    </div>
-                  )}
+                  {/* ❌ DESCRIPTION REMOVED FROM HERE */}
 
                 </div>
               </div>
