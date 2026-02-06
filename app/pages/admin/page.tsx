@@ -19,7 +19,8 @@ import {
   FaAlignLeft,
   FaYoutube,
   FaLongArrowAltRight,
-  FaExclamationTriangle
+  FaExclamationTriangle,
+  FaFire
 } from "react-icons/fa";
 import { getYouTubeThumbnail } from "@/app/lib/utils";
 import Link from "next/link";
@@ -36,9 +37,11 @@ type Ticket = {
   music_category: string;
   deadline: string;
   description?: string;
-  status: "new" | "queue" | "in progress" | "done";
+  // 🔄 UPDATE: Changed 'queue' to 'accepted' to match your DB/Logic
+  status: "new" | "accepted" | "in progress" | "done"; 
   created_at: string;
   position: number;
+  hype?: boolean;
   profiles?: {
     full_name: string;
     avatar_url: string;
@@ -47,7 +50,8 @@ type Ticket = {
 
 const columns = [
   { id: "new", title: "NEW", color: "bg-gray-700", border: "border-gray-600" },
-  { id: "queue", title: "QUEUE", color: "bg-blue-600", border: "border-blue-500" },
+  // 🔄 UPDATE: ID is now 'accepted', Title remains 'QUEUE'
+  { id: "accepted", title: "QUEUE", color: "bg-blue-600", border: "border-blue-500" },
   { id: "in progress", title: "IN PROGRESS", color: "bg-yellow-600", border: "border-yellow-500" },
   { id: "done", title: "DONE", color: "bg-green-600", border: "border-green-500" },
 ];
@@ -74,8 +78,6 @@ const DraggableCard = ({ ticket, index, col, confirmDelete, advanceStatus }: any
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           style={{ ...provided.draggableProps.style }}
-          // 🛠️ FIX: Removed 'transition-all' to prevent drag-drop glitches. 
-          // Replaced with specific transitions (colors, borders, shadows) so layout shifts are instant.
           className={`border border-[#333] rounded-xl mb-3 shadow-lg group relative overflow-hidden flex flex-col
             hover:border-gray-500 transition-colors duration-200
             ${snapshot.isDragging ? "shadow-2xl ring-2 ring-blue-500 rotate-2 opacity-90 z-50" : ""}
@@ -100,8 +102,15 @@ const DraggableCard = ({ ticket, index, col, confirmDelete, advanceStatus }: any
           {/* Content */}
           <div className="relative z-10 p-4">
             
-            {/* Badge */}
-            <div className="absolute top-3 right-4 z-10 transition-opacity duration-200 group-hover:opacity-0">
+            {/* 🏷️ TYPE BADGES */}
+            <div className="absolute top-3 right-4 z-10 transition-opacity duration-200 group-hover:opacity-0 flex gap-2">
+               
+               {ticket.hype && (
+                 <span className="text-[10px] px-2 py-0.5 rounded border uppercase font-bold tracking-wider backdrop-blur-md shadow-sm bg-red-500/20 text-red-200 border-red-500/50 flex items-center gap-1">
+                   <FaFire size={8} /> Hype
+                 </span>
+               )}
+
                <span className={`text-[10px] px-2 py-0.5 rounded border uppercase font-bold tracking-wider backdrop-blur-md shadow-sm
                  ${isChoreo 
                     ? 'bg-purple-500/20 text-purple-200 border-purple-500/50' 
@@ -109,6 +118,7 @@ const DraggableCard = ({ ticket, index, col, confirmDelete, advanceStatus }: any
                `}>
                  {ticket.music_category || "Dance Class"}
                </span>
+               
             </div>
 
             {/* Delete Button */}
@@ -191,7 +201,6 @@ const DraggableCard = ({ ticket, index, col, confirmDelete, advanceStatus }: any
                 </Link>
 
                 <div className="flex flex-wrap gap-1.5 mt-2">
-                  {/* BPM Badge */}
                   <span className="text-[10px] bg-black/50 text-gray-300 px-2 py-0.5 rounded border border-white/10 backdrop-blur-sm font-mono flex items-center">
                     <span className="text-gray-500 font-bold mr-1">BPM:</span> 
                     <span className="text-white font-bold">{ticket.base_bpm || "?"}</span>
@@ -214,12 +223,12 @@ const DraggableCard = ({ ticket, index, col, confirmDelete, advanceStatus }: any
                 onClick={() => advanceStatus(ticket)}
                 className={`w-full py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md
                   ${col.id === "new" ? "bg-blue-600/90 hover:bg-blue-500 text-white" : ""}
-                  ${col.id === "queue" ? "bg-yellow-600/90 hover:bg-yellow-500 text-white" : ""}
+                  ${col.id === "accepted" ? "bg-yellow-600/90 hover:bg-yellow-500 text-white" : ""}
                   ${col.id === "in progress" ? "bg-green-600/90 hover:bg-green-500 text-white" : ""}
                 `}
               >
                 {col.id === "new" && <><FaCheck /> Accept</>}
-                {col.id === "queue" && <><FaPlay /> Start</>}
+                {col.id === "accepted" && <><FaPlay /> Start</>}
                 {col.id === "in progress" && <><FaCheckCircle /> Finish</>}
               </button>
             )}
@@ -312,7 +321,13 @@ export default function AdminPage() {
   }
 
   async function advanceStatus(ticket: Ticket) {
-    const statusFlow: Record<string, Ticket["status"]> = { new: "queue", queue: "in progress", "in progress": "done" };
+    // 🔄 UPDATE: Flow goes from 'new' -> 'accepted' -> 'in progress' -> 'done'
+    const statusFlow: Record<string, Ticket["status"]> = { 
+      new: "accepted", 
+      accepted: "in progress", 
+      "in progress": "done" 
+    };
+    
     const nextStatus = statusFlow[ticket.status];
     if (!nextStatus) return;
 

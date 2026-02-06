@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import { FaMusic, FaYoutube, FaClock, FaCheck, FaInfoCircle } from "react-icons/fa";
+import { FaMusic, FaYoutube, FaClock, FaCheck, FaInfoCircle, FaFire, FaCalendarAlt } from "react-icons/fa"; // 👈 Added FaCalendarAlt
 import { useToast } from "@/app/context/ToastContext"; 
 
 export default function RequestSongPage() {
@@ -17,8 +17,10 @@ export default function RequestSongPage() {
   const [youtubeLinks, setYoutubeLinks] = useState([""]); 
   const [baseBpm, setBaseBpm] = useState("");
   const [targetBpm, setTargetBpm] = useState("");
+  const [deadline, setDeadline] = useState(""); // 👈 New State
   const [musicCategory, setMusicCategory] = useState("class music");
   const [description, setDescription] = useState(""); 
+  const [isHype, setIsHype] = useState(false);
 
   useEffect(() => {
     getUser();
@@ -73,9 +75,10 @@ export default function RequestSongPage() {
         youtube_link: validLinks, 
         base_bpm: baseBpm,
         target_bpm: targetBpm,
+        deadline: deadline || null, // 👈 Save Deadline
         music_category: musicCategory,
-        // Only save description if Choreo is selected (optional cleanup)
         description: musicCategory === "choreo" ? description : "",
+        hype: musicCategory === "choreo" ? isHype : false,
         status: "new",
       },
     ]);
@@ -119,7 +122,6 @@ export default function RequestSongPage() {
           <div>
             <label className="block text-sm font-bold text-gray-400 mb-2 flex justify-between">
                 <span>YouTube Links</span>
-                {/* Only show 'Add up to 5' hint if Choreo */}
                 {musicCategory === "choreo" && <span className="text-xs font-normal text-gray-500">Add up to 5</span>}
             </label>
             <div className="space-y-3">
@@ -149,7 +151,6 @@ export default function RequestSongPage() {
                 ))}
             </div>
             
-            {/* 🛠️ CONDITIONAL ADD BUTTON: Only show if Choreo */}
             {musicCategory === "choreo" && youtubeLinks.length < 5 && (
                 <button 
                     type="button" 
@@ -161,36 +162,57 @@ export default function RequestSongPage() {
             )}
           </div>
 
-          {/* BPM Range */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* BPM & Deadline Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            
+            {/* BPM */}
+            <div className="flex gap-2">
+                <div className="flex-1">
+                    <label className="block text-sm font-bold text-gray-400 mb-2">Base BPM</label>
+                    <div className="relative">
+                        <FaClock className="absolute left-3 top-3.5 text-gray-500" />
+                        <input
+                        type="number"
+                        className="w-full bg-[#252525] border border-[#444] rounded-xl p-3 pl-10 text-white focus:border-blue-500 focus:outline-none transition-colors"
+                        placeholder="120"
+                        value={baseBpm}
+                        onChange={(e) => setBaseBpm(e.target.value)}
+                        required
+                        />
+                    </div>
+                </div>
+                <div className="flex-1">
+                    <label className="block text-sm font-bold text-gray-400 mb-2">Target BPM</label>
+                    <div className="relative">
+                        <FaClock className="absolute left-3 top-3.5 text-gray-500" />
+                        <input
+                        type="number"
+                        className="w-full bg-[#252525] border border-[#444] rounded-xl p-3 pl-10 text-white focus:border-blue-500 focus:outline-none transition-colors"
+                        placeholder="128"
+                        value={targetBpm}
+                        onChange={(e) => setTargetBpm(e.target.value)}
+                        required
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* 🗓️ DEADLINE SELECTOR */}
             <div>
-              <label className="block text-sm font-bold text-gray-400 mb-2">Base BPM</label>
+              <label className="block text-sm font-bold text-gray-400 mb-2">Deadline</label>
               <div className="relative">
-                <FaClock className="absolute left-3 top-3.5 text-gray-500" />
+                <FaCalendarAlt className="absolute left-3 top-3.5 text-gray-500" />
                 <input
-                  type="number"
-                  className="w-full bg-[#252525] border border-[#444] rounded-xl p-3 pl-10 text-white focus:border-blue-500 focus:outline-none transition-colors"
-                  placeholder="120"
-                  value={baseBpm}
-                  onChange={(e) => setBaseBpm(e.target.value)}
+                  type="date"
+                  className="w-full bg-[#252525] border border-[#444] rounded-xl p-3 pl-10 text-white focus:border-blue-500 focus:outline-none transition-colors appearance-none"
+                  style={{ colorScheme: "dark" }}
+                  value={deadline}
+                  onChange={(e) => setDeadline(e.target.value)}
                   required
                 />
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-400 mb-2">Target BPM</label>
-              <div className="relative">
-                <FaClock className="absolute left-3 top-3.5 text-gray-500" />
-                <input
-                  type="number"
-                  className="w-full bg-[#252525] border border-[#444] rounded-xl p-3 pl-10 text-white focus:border-blue-500 focus:outline-none transition-colors"
-                  placeholder="128"
-                  value={targetBpm}
-                  onChange={(e) => setTargetBpm(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
+
           </div>
 
           {/* Category Selection */}
@@ -201,8 +223,7 @@ export default function RequestSongPage() {
                     type="button"
                     onClick={() => {
                         setMusicCategory("class music");
-                        // Optional: Reset links to 1 when switching back to Class Music?
-                        // setYoutubeLinks([youtubeLinks[0]]); 
+                        setIsHype(false); 
                     }}
                     className={`p-4 rounded-xl border transition-all font-bold text-center
                         ${musicCategory === "class music" 
@@ -228,18 +249,49 @@ export default function RequestSongPage() {
             </div>
           </div>
 
-          {/* 🛠️ CONDITIONAL DESCRIPTION: Only show if Choreo */}
+          {/* Conditional Extras (Hype & Description) */}
           {musicCategory === "choreo" && (
-            <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                <label className="block text-sm font-bold text-gray-400 mb-2 flex items-center gap-2">
-                    Description <FaInfoCircle className="text-gray-600" title="Add specific details or instructions" />
-                </label>
-                <textarea
-                className="w-full bg-[#252525] border border-[#444] rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none transition-colors min-h-[100px] resize-y"
-                placeholder="Any specific instructions, cuts, or vibe details..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                />
+            <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                
+                {/* Hype Checkbox */}
+                <div 
+                    onClick={() => setIsHype(!isHype)}
+                    className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all group
+                        ${isHype 
+                            ? "bg-red-900/20 border-red-500/50" 
+                            : "bg-[#252525] border-[#444] hover:border-gray-500"
+                        }
+                    `}
+                >
+                    <div className={`w-6 h-6 rounded-md border flex items-center justify-center transition-colors
+                        ${isHype ? "bg-red-500 border-red-500 text-white" : "border-gray-500 bg-transparent"}
+                    `}>
+                        {isHype && <FaCheck size={12} />}
+                    </div>
+                    
+                    <div className="flex-1">
+                        <h3 className={`font-bold text-sm ${isHype ? "text-red-400" : "text-gray-300"}`}>
+                            Level Assessment / Hype Track
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                            Mark this if this is for a high-energy level assessment choreography.
+                        </p>
+                    </div>
+                    <FaFire className={`text-xl ${isHype ? "text-red-500 animate-pulse" : "text-gray-600"}`} />
+                </div>
+
+                {/* Description */}
+                <div>
+                    <label className="block text-sm font-bold text-gray-400 mb-2 flex items-center gap-2">
+                        Description <FaInfoCircle className="text-gray-600" title="Add specific details or instructions" />
+                    </label>
+                    <textarea
+                        className="w-full bg-[#252525] border border-[#444] rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none transition-colors min-h-[100px] resize-y"
+                        placeholder="Any specific instructions, cuts, or vibe details..."
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                    />
+                </div>
             </div>
           )}
 
