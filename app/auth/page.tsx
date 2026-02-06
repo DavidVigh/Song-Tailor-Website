@@ -2,18 +2,22 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import { FaGoogle, FaEnvelope, FaLock, FaSignInAlt, FaUserPlus } from "react-icons/fa";
-import { useToast } from "@/app/context/ToastContext"; // 👈 Import Hook
+import { FaMusic, FaUser, FaLock, FaEnvelope } from "react-icons/fa";
+import { useToast } from "@/app/context/ToastContext";
 
 export default function AuthPage() {
+  const router = useRouter();
+  const { showToast } = useToast();
+  
+  const [loading, setLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
+  
+  // Form Fields
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const router = useRouter();
-  const { showToast } = useToast(); // 👈 Use Hook
+  const [fullName, setFullName] = useState(""); 
 
-  // 1. Check if user is already logged in
+  // Check if already logged in
   useEffect(() => {
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -24,144 +28,209 @@ export default function AuthPage() {
     checkUser();
   }, []);
 
-  // 2. Role-Based Redirect Helper
-  const checkRole = async (userId: string) => {
-    const { data: profile, error } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", userId)
-      .single();
+  // 🔄 SELF-HEALING CHECK ROLE
+  async function checkRole(userId: string) {
+    try {
+      // 1. Try to get the profile
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .maybeSingle(); 
 
-    if (error) {
-      console.error("Error fetching role:", error);
-      router.push("/"); 
-      return;
+      // 2. SUCCESS: Profile found
+      if (profile) {
+        if (profile.role === "admin") {
+            router.push("/pages/admin");
+        } else {
+            router.push("/pages/request");
+        }
+        return;
+      }
+
+      // 3. FAILURE: Profile missing? -> AUTO-FIX IT
+      console.log("Profile not found. Attempting to auto-create...");
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+         // Use UPSERT here too for safety
+         const { error: insertError } = await supabase.from("profiles").upsert([
+           {
+             id: user.id,
+             email: user.email,
+             full_name: user.user_metadata?.full_name || "User",
+             role: "user"
+           }
+         ], { onConflict: 'id' });
+
+         if (!insertError) {
+             console.log("Profile auto-created. Redirecting...");
+             router.push("/pages/request");
+         } else {
+             console.error("Critical: Failed to auto-create profile:", JSON.stringify(insertError, null, 2));
+             showToast("Account error. Please contact support.", "error");
+         }
+      }
+
+    } catch (err) {
+      console.error("Unexpected auth error:", err);
     }
+  }
 
-    if (profile?.role === "admin") {
-      router.push("/pages/admin");
-    } else {
-      router.push("/pages/user/my-tickets"); // Or dashboard
-    }
-  };
-
-  // 3. Email Auth Handler
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
       if (isSignUp) {
-        const { error, data } = await supabase.auth.signUp({
+        // 📝 SIGN UP LOGIC
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            data: {
+              full_name: fullName, 
+            },
+          },
         });
+
         if (error) throw error;
-        
-        // Create Profile immediately after signup
+
+        // Manually create profile using UPSERT (Safe Insert)
         if (data.user) {
-            await supabase.from("profiles").insert([{ id: data.user.id, role: "user" }]);
+          const { error: profileError } = await supabase
+            .from("profiles")
+            .upsert(
+              [
+                {
+                  id: data.user.id,
+                  full_name: fullName,
+                  email: email,
+                  role: "user",
+                },
+              ],
+              { onConflict: 'id' } // If ID exists, just update/ignore
+            );
+            
+           if (profileError) {
+             console.error("Profile creation error:", JSON.stringify(profileError, null, 2));
+           }
         }
+
+        showToast("Account created! Logging you in...", "success");
         
-        showToast("Check your email to confirm sign up!", "info"); // 👈 Toast
+        if (data.session) {
+            checkRole(data.user!.id);
+        } else {
+            showToast("Please check your email to confirm your account.", "info");
+        }
+
       } else {
+        // 🔐 LOGIN LOGIC
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
+
         if (error) throw error;
-        
-        showToast("Logged in successfully!", "success"); // 👈 Toast
-        if (data.user) checkRole(data.user.id);
+
+        showToast("Welcome back!", "success");
+        if (data.session) {
+          checkRole(data.session.user.id);
+        }
       }
     } catch (error: any) {
-      showToast(error.message || "Authentication failed", "error"); // 👈 Toast
+      showToast(error.message || "Authentication failed", "error");
     } finally {
       setLoading(false);
     }
   };
 
-  // 4. Google Auth Handler
-  const handleGoogleLogin = async () => {
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-      if (error) throw error;
-    } catch (error: any) {
-      showToast(error.message, "error"); // 👈 Toast
-    }
-  };
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#121212] p-4 text-white">
-      <div className="w-full max-w-md rounded-2xl border border-[#333] bg-[#1e1e1e] p-8 shadow-2xl">
-        <h2 className="mb-6 text-center text-3xl font-bold tracking-tight text-white">
-          {isSignUp ? "Create an Account" : "Welcome Back"}
-        </h2>
-
-        {/* Google Login */}
-        <button
-          onClick={handleGoogleLogin}
-          className="mb-6 flex w-full items-center justify-center gap-3 rounded-xl bg-white py-3 font-semibold text-gray-900 transition-all hover:bg-gray-200"
-        >
-          <FaGoogle className="text-red-500" />
-          Continue with Google
-        </button>
-
-        <div className="mb-6 flex items-center gap-4 text-sm text-gray-500">
-          <div className="h-px flex-1 bg-[#333]"></div>
-          OR
-          <div className="h-px flex-1 bg-[#333]"></div>
+    <div className="min-h-screen bg-[#121212] flex items-center justify-center p-4">
+      <div className="bg-[#1e1e1e] border border-[#333] p-8 rounded-2xl shadow-2xl w-full max-w-md">
+        
+        {/* Logo / Header */}
+        <div className="flex justify-center mb-6">
+            <div className="w-16 h-16 bg-blue-600/20 rounded-full flex items-center justify-center border border-blue-500/50 shadow-lg shadow-blue-500/20">
+                <FaMusic className="text-blue-500 text-3xl" />
+            </div>
         </div>
 
-        {/* Email Form */}
+        <h1 className="text-3xl font-bold text-white mb-2 text-center">
+          {isSignUp ? "Create Account" : "Welcome Back"}
+        </h1>
+        <p className="text-gray-400 mb-8 text-center">
+          {isSignUp ? "Join to request songs" : "Sign in to manage your requests"}
+        </p>
+
         <form onSubmit={handleAuth} className="space-y-4">
+          
+          {/* Username Field (Only for Sign Up) */}
+          {isSignUp && (
+            <div className="relative animate-in fade-in slide-in-from-top-2">
+              <FaUser className="absolute left-3 top-3.5 text-gray-500" />
+              <input
+                type="text"
+                placeholder="Username / Full Name"
+                className="w-full bg-[#252525] border border-[#333] rounded-xl p-3 pl-10 text-white focus:border-blue-500 focus:outline-none transition-colors"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                required
+              />
+            </div>
+          )}
+
+          {/* Email Field */}
           <div className="relative">
-            <FaEnvelope className="absolute left-4 top-3.5 text-gray-500" />
+            <FaEnvelope className="absolute left-3 top-3.5 text-gray-500" />
             <input
               type="email"
-              placeholder="Email address"
+              placeholder="Email Address"
+              className="w-full bg-[#252525] border border-[#333] rounded-xl p-3 pl-10 text-white focus:border-blue-500 focus:outline-none transition-colors"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-[#333] bg-[#252525] py-3 pl-11 pr-4 text-white focus:border-blue-500 focus:outline-none"
               required
             />
           </div>
+
+          {/* Password Field */}
           <div className="relative">
-            <FaLock className="absolute left-4 top-3.5 text-gray-500" />
+            <FaLock className="absolute left-3 top-3.5 text-gray-500" />
             <input
               type="password"
               placeholder="Password"
+              className="w-full bg-[#252525] border border-[#333] rounded-xl p-3 pl-10 text-white focus:border-blue-500 focus:outline-none transition-colors"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-[#333] bg-[#252525] py-3 pl-11 pr-4 text-white focus:border-blue-500 focus:outline-none"
               required
+              minLength={6}
             />
           </div>
 
+          {/* Submit Button */}
           <button
             type="submit"
             disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 font-bold text-white transition-all hover:bg-blue-500 disabled:opacity-50"
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-blue-900/20 transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 mt-4"
           >
-            {loading ? "Processing..." : isSignUp ? <><FaUserPlus /> Sign Up</> : <><FaSignInAlt /> Log In</>}
+            {loading ? "Processing..." : (isSignUp ? "Sign Up" : "Sign In")}
           </button>
         </form>
 
-        {/* Toggle */}
-        <p className="mt-6 text-center text-sm text-gray-400">
-          {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
-          <button
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="font-semibold text-blue-400 hover:underline"
-          >
-            {isSignUp ? "Log In" : "Sign Up"}
-          </button>
-        </p>
+        {/* Toggle Mode */}
+        <div className="text-center mt-6">
+          <p className="text-sm text-gray-500">
+            {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
+            <button 
+              onClick={() => setIsSignUp(!isSignUp)}
+              className="text-blue-400 hover:text-blue-300 font-bold ml-1 transition-colors"
+            >
+              {isSignUp ? "Log In" : "Sign Up"}
+            </button>
+          </p>
+        </div>
+
       </div>
     </div>
   );
