@@ -10,6 +10,7 @@ import {
 } from "react-icons/fa";
 import { getYouTubeThumbnail } from "@/app/lib/utils";
 import { CarouselThumbnail, BackgroundCarousel } from "@/app/components/TicketCarousels";
+import { useToast } from "@/app/context/ToastContext"; // 👈 Import Hook
 
 type Profile = {
   id: string;
@@ -38,6 +39,7 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
   const router = useRouter();
   const searchParams = useSearchParams(); 
   const { id } = use(params);
+  const { showToast } = useToast(); // 👈 Use Hook
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -139,7 +141,7 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
 
     if (error) {
       console.error("Update failed:", error);
-      alert("Error saving: " + error.message);
+      showToast("Error saving changes: " + error.message, "error"); // 👈 Use Toast
     } else {
       setProfile({ 
         ...profile, 
@@ -148,6 +150,7 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
         instagram_link: finalInsta,
         role: formData.role 
       });
+      showToast("Profile updated successfully!", "success"); // 👈 Use Toast
       setShowModal(false);
     }
     setSaving(false);
