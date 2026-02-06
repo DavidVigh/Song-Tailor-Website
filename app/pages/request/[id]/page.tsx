@@ -1,10 +1,11 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { 
   FaChevronLeft, 
+  FaChevronRight, 
   FaClock, 
   FaCheck, 
   FaPlay, 
@@ -24,22 +25,27 @@ import {
 import { getYouTubeThumbnail } from "@/app/lib/utils";
 import { useToast } from "@/app/context/ToastContext";
 
-// Helper for the visual montage
-const ChoreoMontage = ({ images }: { images: string[] }) => {
+// 🎨 COMPONENT: Montage Header (Static Background Collage)
+const MontageHeader = ({ images }: { images: string[] }) => {
+  const displayImages = images.length < 5 ? [...images, ...images, ...images] : images;
+  
   return (
-    <div className="absolute inset-0 flex w-full h-full overflow-hidden">
-      {images.map((img, i) => (
-        <div 
-          key={i} 
-          className="relative h-full flex-1 overflow-hidden transform -skew-x-12 scale-110 border-r-4 border-black/50 last:border-r-0"
-        >
-          <img 
-            src={img} 
-            alt="montage-part" 
-            className="w-full h-full object-cover transform skew-x-12 scale-125 opacity-80" 
-          />
-        </div>
-      ))}
+    <div className="absolute top-0 left-0 w-full h-[400px] z-0 overflow-hidden opacity-40 pointer-events-none select-none">
+      <div className="absolute inset-0 flex w-full h-full">
+        {displayImages.slice(0, 7).map((img, i) => (
+          <div 
+            key={i} 
+            className="relative h-full flex-1 overflow-hidden transform -skew-x-12 scale-125 border-r border-black/30"
+          >
+            <img 
+              src={img} 
+              alt="header-part" 
+              className="w-full h-full object-cover grayscale-[50%] opacity-70" 
+            />
+          </div>
+        ))}
+      </div>
+      <div className="absolute inset-0 bg-gradient-to-b from-[#121212]/20 via-[#121212]/80 to-[#121212]" />
     </div>
   );
 };
@@ -53,7 +59,16 @@ export default function RequestDetailPage() {
   const [saving, setSaving] = useState(false);
   const [ticket, setTicket] = useState<any>(null);
   
-  // 🔐 Permissions State
+  // 🎢 INFINITE CAROUSEL STATE
+  const [currentIndex, setCurrentIndex] = useState(1);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [videoTitles, setVideoTitles] = useState<Record<string, string>>({});
+
+  // 👆 TOUCH STATE
+  const touchStartX = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
+
+  // 🔐 Permissions
   const [isAdmin, setIsAdmin] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -62,67 +77,109 @@ export default function RequestDetailPage() {
     deadline: ""
   });
 
+  // --- 1. DATA PREPARATION (Must happen before any returns) ---
+  const links = ticket ? (Array.isArray(ticket.youtube_link) ? ticket.youtube_link : [ticket.youtube_link]) : [];
+  
+  const rawThumbnails = getYouTubeThumbnail(links);
+  let thumbnails = Array.isArray(rawThumbnails) ? rawThumbnails : (rawThumbnails ? [rawThumbnails] : []);
+  // Upgrade to HD
+  thumbnails = thumbnails.map(url => url.replace("hqdefault", "maxresdefault"));
+  
+  const totalSlides = thumbnails.length;
+  const isChoreo = (ticket?.music_category || "").toLowerCase() === "choreo";
+
+  // Infinite Loop Array: [Last, ...Originals, First]
+  // We default to empty array if no data to prevent crash during loading
+  const extendedThumbnails = totalSlides > 1 
+    ? [thumbnails[totalSlides - 1], ...thumbnails, thumbnails[0]]
+    : thumbnails;
+
+  // Calculate Real Index
+  let realActiveIndex = 0;
+  if (totalSlides > 1) {
+    if (currentIndex === 0) realActiveIndex = totalSlides - 1;
+    else if (currentIndex === extendedThumbnails.length - 1) realActiveIndex = 0;
+    else realActiveIndex = currentIndex - 1;
+  }
+
+  const currentLink = links[realActiveIndex] || links[0] || "#";
+  const currentTitle = videoTitles[currentLink] || "Watch on YouTube";
+
+  // --- 2. EFFECTS (Must be at top level) ---
+
   useEffect(() => {
     if (id) fetchRequestData();
   }, [id]);
 
+  // Fetch YouTube Titles
+  useEffect(() => {
+    if (!ticket) return;
+    const fetchTitles = async () => {
+      const titles: Record<string, string> = {};
+      await Promise.all(links.map(async (url: string) => {
+        try {
+          const res = await fetch(`https://noembed.com/embed?url=${url}`);
+          const data = await res.json();
+          if (data.title) titles[url] = data.title;
+        } catch (err) {
+          console.error("Failed to fetch title for", url);
+        }
+      }));
+      setVideoTitles(prev => ({ ...prev, ...titles }));
+    };
+    if (links.length > 0) fetchTitles();
+  }, [ticket]);
+
+  // 👻 TELEPORTATION EFFECT (Moved UP before returns)
+  useEffect(() => {
+    if (!isTransitioning) return;
+
+    const timeOut = setTimeout(() => {
+      setIsTransitioning(false);
+      if (currentIndex === 0) {
+        setCurrentIndex(extendedThumbnails.length - 2);
+      } 
+      else if (currentIndex === extendedThumbnails.length - 1) {
+        setCurrentIndex(1);
+      }
+    }, 700);
+
+    return () => clearTimeout(timeOut);
+  }, [currentIndex, isTransitioning, extendedThumbnails.length]);
+
+
+  // --- 3. FUNCTIONS ---
+
   async function fetchRequestData() {
     try {
       setLoading(true);
-
-      // 1. Get Current User
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/auth"); return; }
 
-      // 2. Check Role
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single();
-      
+      const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
       const adminStatus = profile?.role === 'admin';
       setIsAdmin(adminStatus);
 
-      // 3. Fetch Request Data
-      const { data, error } = await supabase
-        .from("song_requests")
-        .select(`*, profiles (full_name, avatar_url, phone, id)`)
-        .eq("id", id)
-        .maybeSingle(); 
+      const { data, error } = await supabase.from("song_requests").select(`*, profiles (full_name, avatar_url, phone, id)`).eq("id", id).maybeSingle(); 
 
-      if (error) {
-        console.error("System Error:", error.message);
-        return; 
-      }
-
-      if (!data) {
+      if (error || !data || (!adminStatus && data.user_id !== user.id)) {
         setTicket(null); 
         return; 
       }
 
-      // 4. Double-Check Ownership
-      if (!adminStatus && data.user_id !== user.id) {
-        setTicket(null);
-        return;
-      }
-
       setTicket(data);
-      
       setFormData({
         base_bpm: data.base_bpm || "",
         target_bpm: data.target_bpm || "",
         deadline: data.deadline || ""
       });
-
     } catch (error) {
-      console.error("Unexpected Error", error);
+      console.error("Error", error);
     } finally {
       setLoading(false);
     }
   }
 
-  // 💾 SAVE CHANGES
   async function saveChanges() {
     if (!isAdmin) return; 
     try {
@@ -132,7 +189,6 @@ export default function RequestDetailPage() {
         target_bpm: formData.target_bpm ? parseInt(formData.target_bpm) : null,
         deadline: formData.deadline || null
       };
-
       const { error } = await supabase.from("song_requests").update(updates).eq("id", id);
       if (error) throw error;
       showToast("Changes saved successfully!", "success");
@@ -143,7 +199,6 @@ export default function RequestDetailPage() {
     }
   }
 
-  // 🔄 UPDATE STATUS
   async function updateStatus(newStatus: string) {
     if (!isAdmin) return;
     setTicket((prev: any) => ({ ...prev, status: newStatus }));
@@ -152,19 +207,48 @@ export default function RequestDetailPage() {
     else showToast(`Status updated to ${newStatus}`, "success");
   }
 
-  // 🗑️ DELETE REQUEST
   async function deleteTicket() {
     if (!isAdmin) return;
-    if(!confirm("Are you sure you want to delete this request permanently?")) return;
-    
+    if(!confirm("Delete this request?")) return;
     const { error } = await supabase.from("song_requests").delete().eq("id", id);
-    if (error) {
-        showToast("Failed to delete request", "error");
-    } else {
-        showToast("Request deleted", "info");
-        router.push("/pages/admin");
-    }
+    if (error) showToast("Failed to delete", "error");
+    else { showToast("Deleted", "info"); router.push("/pages/admin"); }
   }
+
+  // 🎠 NAVIGATION
+  const nextSlide = () => {
+    if (totalSlides <= 1 || isTransitioning) return;
+    setIsTransitioning(true);
+    setCurrentIndex(prev => prev + 1);
+  };
+
+  const prevSlide = () => {
+    if (totalSlides <= 1 || isTransitioning) return;
+    setIsTransitioning(true);
+    setCurrentIndex(prev => prev - 1);
+  };
+
+  const goToSlide = (index: number) => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+    setCurrentIndex(index + 1); 
+  };
+
+  // 👆 TOUCH HANDLERS
+  const minSwipeDistance = 50;
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchEndX.current = null;
+    touchStartX.current = e.targetTouches[0].clientX;
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+  const onTouchEnd = () => {
+    if (!touchStartX.current || !touchEndX.current) return;
+    const distance = touchStartX.current - touchEndX.current;
+    if (distance > minSwipeDistance) nextSlide();
+    if (distance < -minSwipeDistance) prevSlide();
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -175,72 +259,71 @@ export default function RequestDetailPage() {
     }
   };
 
-  if (loading) return <div className="min-h-screen bg-[#121212] text-white flex items-center justify-center">Loading...</div>;
-  
-  if (!ticket) return (
-    <div className="min-h-screen bg-[#121212] text-white flex flex-col items-center justify-center gap-6 p-4">
-        <div className="bg-[#1a1a1a] border border-[#333] p-10 rounded-3xl text-center max-w-lg shadow-2xl">
-            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500 text-3xl">!</div>
-            <h2 className="text-3xl font-bold text-white mb-3">Request Not Found</h2>
-            <p className="text-gray-400 mb-8 text-sm leading-relaxed">
-               You do not have permission to view this request, or it may have been deleted. 
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-               <Link href="/" className="bg-[#222] hover:bg-[#333] border border-[#333] hover:border-gray-500 text-white p-4 rounded-xl flex flex-col items-center gap-2 transition-all group">
-                   <FaHome className="text-gray-500 group-hover:text-blue-400 text-xl" />
-                   <span className="text-sm font-bold">Home</span>
-               </Link>
-               <Link href="/pages/request" className="bg-[#222] hover:bg-[#333] border border-[#333] hover:border-gray-500 text-white p-4 rounded-xl flex flex-col items-center gap-2 transition-all group">
-                   <FaPlus className="text-gray-500 group-hover:text-green-400 text-xl" />
-                   <span className="text-sm font-bold">New Ticket</span>
-               </Link>
-               <Link href="/pages/user/my-tickets" className="bg-[#222] hover:bg-[#333] border border-[#333] hover:border-gray-500 text-white p-4 rounded-xl flex flex-col items-center gap-2 transition-all group">
-                   <FaList className="text-gray-500 group-hover:text-purple-400 text-xl" />
-                   <span className="text-sm font-bold">My Tickets</span>
-               </Link>
-            </div>
-        </div>
-    </div>
-  );
+  // --- 4. RENDER (Early returns happen HERE, after all hooks) ---
 
-  const links = Array.isArray(ticket.youtube_link) ? ticket.youtube_link : [ticket.youtube_link];
-  const rawThumbnails = getYouTubeThumbnail(links);
-  const thumbnails = Array.isArray(rawThumbnails) ? rawThumbnails : (rawThumbnails ? [rawThumbnails] : []);
-  const isChoreo = (ticket.music_category || "").toLowerCase() === "choreo";
+  if (loading) return <div className="min-h-screen bg-[#121212] text-white flex items-center justify-center">Loading...</div>;
+  if (!ticket) return <div className="min-h-screen bg-[#121212] text-white flex items-center justify-center">Request Not Found</div>;
 
   return (
-    <main className="min-h-screen bg-[#121212] text-white font-sans p-4 sm:p-6">
+    <main className="min-h-screen bg-[#121212] text-white font-sans relative select-none">
       
+      {/* 🖼️ MONTAGE HEADER */}
+      {thumbnails.length > 0 && <MontageHeader images={thumbnails} />}
+
       {/* Navigation */}
-      <div className="flex justify-between items-center mb-8 max-w-5xl mx-auto">
-        <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
-          <FaChevronLeft /> {isAdmin ? "Back to Board" : "Back to My Requests"}
+      <div className="relative z-20 flex justify-between items-center mb-4 max-w-5xl mx-auto p-4 sm:p-6">
+        <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors bg-black/30 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 shadow-lg">
+          <FaChevronLeft /> {isAdmin ? "Back to Board" : "Back"}
         </button>
         {isAdmin && (
-          <button onClick={deleteTicket} className="text-red-500 hover:text-red-400 p-2 rounded-lg hover:bg-red-900/20 transition-colors" title="Delete Request">
+          <button onClick={deleteTicket} className="text-red-500 hover:text-red-400 p-2 rounded-lg hover:bg-red-900/20 transition-colors bg-black/30 backdrop-blur-md border border-white/10">
               <FaTrash />
           </button>
         )}
       </div>
 
-      <div className="max-w-5xl mx-auto space-y-8">
+      <div className="relative z-10 max-w-5xl mx-auto space-y-8 p-4 sm:p-6 pt-0">
         
         {/* 🎵 MAIN HERO CARD */}
-        {/* 🚀 CHANGED: Reduced shadow-2xl to shadow-lg to fix overlap issue */}
-        <div className="bg-[#1a1a1a] border border-[#333] rounded-3xl shadow-lg shadow-black/50 relative z-20 overflow-hidden group min-h-[300px] flex flex-col justify-end">
-            <div className="absolute inset-0 z-0">
-               {isChoreo && thumbnails.length > 1 ? (
-                 <ChoreoMontage images={thumbnails} />
-               ) : (
-                 <div className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" style={{ backgroundImage: `url('${thumbnails[0]}')` }} />
-               )}
+        <div 
+            className="bg-[#1a1a1a] border border-[#333] rounded-3xl shadow-2xl shadow-black/50 relative z-20 overflow-hidden group min-h-[350px] flex flex-col justify-end touch-pan-y"
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+        >
+            
+            {/* 🖼️ INFINITE SLIDER */}
+            <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+               <div 
+                 className={`absolute inset-0 flex h-full ${isTransitioning ? 'transition-transform duration-700 ease-in-out' : ''}`}
+                 style={{ 
+                   width: `${extendedThumbnails.length * 100}%`,
+                   transform: `translateX(-${(currentIndex * 100) / extendedThumbnails.length}%)` 
+                 }}
+               >
+                 {extendedThumbnails.map((img, idx) => (
+                   <div 
+                     key={idx}
+                     className="h-full bg-cover bg-center flex-1 relative"
+                     style={{ backgroundImage: `url('${img}')` }}
+                   >
+                      <div className="absolute inset-0 bg-black/20" />
+                   </div>
+                 ))}
+               </div>
+               
                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent" />
-               <div className="absolute inset-0 bg-black/30" /> 
+               <div className="absolute inset-0 bg-black/30" />
             </div>
 
-            <div className="relative z-10 p-8">
-                <div className="flex flex-col md:flex-row justify-between items-end gap-6">
-                    <div className="w-full">
+            <div className="relative z-10 p-6 sm:p-8">
+                
+                <div className="absolute top-6 right-6 z-20">
+                    {getStatusBadge(ticket.status)}
+                </div>
+
+                <div className="flex flex-col gap-4 pointer-events-none">
+                    <div className="w-full pr-24 sm:pr-0">
                         <span className={`inline-block mb-3 px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider border shadow-lg backdrop-blur-sm ${isChoreo ? 'bg-purple-600/80 text-purple-100 border-purple-400/50' : 'bg-blue-600/80 text-blue-100 border-blue-400/50'}`}>
                             {ticket.music_category || "Dance Class"}
                         </span>
@@ -251,29 +334,77 @@ export default function RequestDetailPage() {
                             <span className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-lg backdrop-blur-md border border-white/10">
                                 <FaClock className="text-blue-400" /> {new Date(ticket.created_at).toLocaleDateString()}
                             </span>
-                            <a href={links[0]} target="_blank" className="flex items-center gap-2 bg-red-600/80 hover:bg-red-600 text-white px-3 py-1 rounded-lg backdrop-blur-md transition-colors shadow-lg">
-                                <FaYoutube /> Open on YouTube
-                            </a>
                         </div>
                     </div>
-                    <div className="shrink-0 mb-1">{getStatusBadge(ticket.status)}</div>
                 </div>
 
+                {/* 🚀 CONTROLS AREA */}
+                <div className="flex flex-col items-center justify-center gap-3 mt-6 mb-4 pointer-events-auto">
+                    
+                    {/* YouTube Button */}
+                    <a 
+                      href={currentLink} 
+                      target="_blank"
+                      onTouchStart={(e) => e.stopPropagation()}
+                      className="flex items-center gap-2 bg-red-600/90 hover:bg-red-600 text-white px-6 py-2 rounded-full backdrop-blur-md transition-all shadow-lg hover:shadow-red-900/50 border border-white/10 font-bold transform hover:-translate-y-0.5"
+                    >
+                        <FaYoutube size={18} /> 
+                        <span className="truncate max-w-[200px] sm:max-w-[300px]">
+                          {currentTitle}
+                        </span>
+                    </a>
+
+                    {/* Pagination */}
+                    {totalSlides > 1 && (
+                      <div className="flex items-center gap-4">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); prevSlide(); }}
+                          className="hidden md:flex items-center justify-center w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 border border-white/10 text-white/80 hover:text-white transition-all backdrop-blur-sm"
+                        >
+                          <FaChevronLeft size={12} />
+                        </button>
+
+                        <div className="flex justify-center gap-2">
+                          {thumbnails.map((_, idx) => (
+                            <button 
+                              key={idx}
+                              onClick={(e) => { e.stopPropagation(); goToSlide(idx); }}
+                              onTouchStart={(e) => e.stopPropagation()}
+                              className={`transition-all duration-300 rounded-full shadow-sm ${
+                                idx === realActiveIndex 
+                                  ? "w-2.5 h-2.5 bg-white scale-110" 
+                                  : "w-2 h-2 bg-white/40 hover:bg-white/60"
+                              }`}
+                            />
+                          ))}
+                        </div>
+
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); nextSlide(); }}
+                          className="hidden md:flex items-center justify-center w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 border border-white/10 text-white/80 hover:text-white transition-all backdrop-blur-sm"
+                        >
+                          <FaChevronRight size={12} />
+                        </button>
+                      </div>
+                    )}
+                </div>
+
+                {/* Admin Actions */}
                 {isAdmin ? (
-                  <div className="grid grid-cols-3 gap-3 mt-8 pt-6 border-t border-white/10">
+                  <div className="grid grid-cols-3 gap-3 mt-6 pt-6 border-t border-white/10 pointer-events-auto">
                       <button onClick={() => updateStatus('accepted')} className={`py-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all backdrop-blur-md shadow-lg ${ticket.status === 'accepted' ? 'bg-blue-600 text-white ring-2 ring-blue-400' : 'bg-black/40 text-gray-300 hover:bg-black/60 border border-white/10'}`}><FaCheck /> Accept</button>
                       <button onClick={() => updateStatus('in progress')} className={`py-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all backdrop-blur-md shadow-lg ${ticket.status === 'in progress' ? 'bg-yellow-600 text-white ring-2 ring-yellow-400' : 'bg-black/40 text-gray-300 hover:bg-black/60 border border-white/10'}`}><FaPlay /> Play</button>
                       <button onClick={() => updateStatus('completed')} className={`py-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all backdrop-blur-md shadow-lg ${ticket.status === 'completed' ? 'bg-green-600 text-white ring-2 ring-green-400' : 'bg-black/40 text-gray-300 hover:bg-black/60 border border-white/10'}`}><FaCheckDouble /> Finish</button>
                   </div>
                 ) : (
-                  <div className="mt-8 pt-6 border-t border-white/10 text-gray-400 text-sm italic">
-                    Status updates are managed by the admin. You will be notified when this changes.
+                  <div className="mt-6 pt-6 border-t border-white/10 text-gray-400 text-sm italic">
+                    Status updates are managed by the admin.
                   </div>
                 )}
             </div>
         </div>
 
-        {/* 📝 DESCRIPTION CARD */}
+        {/* 📝 DESCRIPTION */}
         {ticket.description && ticket.description.trim() !== "" && (
           <div className="relative z-10 bg-[#1a1a1a] border border-[#333] rounded-3xl p-6 shadow-lg shadow-black/50">
              <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
@@ -285,7 +416,7 @@ export default function RequestDetailPage() {
           </div>
         )}
 
-        {/* Bottom Details Grid */}
+        {/* DETAILS & USER */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-[#1a1a1a] border border-[#333] rounded-3xl p-6">
                 <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-300">
@@ -311,7 +442,6 @@ export default function RequestDetailPage() {
                            )}
                         </div>
                     </div>
-
                     <div>
                         <label className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1 block">Deadline</label>
                         <div className="relative">
@@ -325,7 +455,6 @@ export default function RequestDetailPage() {
                             )}
                         </div>
                     </div>
-
                     {isAdmin && (
                         <button onClick={saveChanges} disabled={saving} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 mt-2 transition-all">
                             {saving ? "Saving..." : <><FaSave /> Save Details</>}
