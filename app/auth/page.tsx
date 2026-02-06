@@ -1,66 +1,168 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { FaGoogle, FaEnvelope, FaLock, FaSignInAlt, FaUserPlus } from "react-icons/fa";
+import { useToast } from "@/app/context/ToastContext"; // 👈 Import Hook
 
 export default function AuthPage() {
-  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { showToast } = useToast(); // 👈 Use Hook
 
-  async function handleAuth(e: React.FormEvent) {
+  // 1. Check if user is already logged in
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        checkRole(session.user.id);
+      }
+    };
+    checkUser();
+  }, []);
+
+  // 2. Role-Based Redirect Helper
+  const checkRole = async (userId: string) => {
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .single();
+
+    if (error) {
+      console.error("Error fetching role:", error);
+      router.push("/"); 
+      return;
+    }
+
+    if (profile?.role === "admin") {
+      router.push("/pages/admin");
+    } else {
+      router.push("/pages/user/my-tickets"); // Or dashboard
+    }
+  };
+
+  // 3. Email Auth Handler
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    if (isSignUp) {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { full_name: fullName } }, // Captured by your DB trigger
-      });
-      if (error) alert(error.message);
-      else alert("Check your email for the confirmation link!");
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) alert(error.message);
-      else router.push("/"); // Redirect to home/request page
+    try {
+      if (isSignUp) {
+        const { error, data } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+        if (error) throw error;
+        
+        // Create Profile immediately after signup
+        if (data.user) {
+            await supabase.from("profiles").insert([{ id: data.user.id, role: "user" }]);
+        }
+        
+        showToast("Check your email to confirm sign up!", "info"); // 👈 Toast
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+        
+        showToast("Logged in successfully!", "success"); // 👈 Toast
+        if (data.user) checkRole(data.user.id);
+      }
+    } catch (error: any) {
+      showToast(error.message || "Authentication failed", "error"); // 👈 Toast
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }
+  };
+
+  // 4. Google Auth Handler
+  const handleGoogleLogin = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) throw error;
+    } catch (error: any) {
+      showToast(error.message, "error"); // 👈 Toast
+    }
+  };
 
   return (
-    <main className="min-h-screen bg-[#1a1a1a] text-white flex items-center justify-center p-6">
-      <div className="w-full max-w-md bg-[#2b2b2b] p-8 rounded-2xl border border-[#3b3b3b] shadow-2xl">
-        <h1 className="text-3xl font-bold mb-6 text-center">🧵 TAILOR // {isSignUp ? "JOIN" : "LOGIN"}</h1>
+    <div className="flex min-h-screen items-center justify-center bg-[#121212] p-4 text-white">
+      <div className="w-full max-w-md rounded-2xl border border-[#333] bg-[#1e1e1e] p-8 shadow-2xl">
+        <h2 className="mb-6 text-center text-3xl font-bold tracking-tight text-white">
+          {isSignUp ? "Create an Account" : "Welcome Back"}
+        </h2>
+
+        {/* Google Login */}
+        <button
+          onClick={handleGoogleLogin}
+          className="mb-6 flex w-full items-center justify-center gap-3 rounded-xl bg-white py-3 font-semibold text-gray-900 transition-all hover:bg-gray-200"
+        >
+          <FaGoogle className="text-red-500" />
+          Continue with Google
+        </button>
+
+        <div className="mb-6 flex items-center gap-4 text-sm text-gray-500">
+          <div className="h-px flex-1 bg-[#333]"></div>
+          OR
+          <div className="h-px flex-1 bg-[#333]"></div>
+        </div>
+
+        {/* Email Form */}
         <form onSubmit={handleAuth} className="space-y-4">
-          {isSignUp && (
+          <div className="relative">
+            <FaEnvelope className="absolute left-4 top-3.5 text-gray-500" />
             <input
-              type="text" placeholder="Full Name" required
-              className="w-full bg-[#1a1a1a] border border-[#3b3b3b] rounded-lg p-3 outline-none focus:border-blue-500"
-              onChange={(e) => setFullName(e.target.value)}
+              type="email"
+              placeholder="Email address"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-xl border border-[#333] bg-[#252525] py-3 pl-11 pr-4 text-white focus:border-blue-500 focus:outline-none"
+              required
             />
-          )}
-          <input
-            type="email" placeholder="Email" required
-            className="w-full bg-[#1a1a1a] border border-[#3b3b3b] rounded-lg p-3 outline-none focus:border-blue-500"
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <input
-            type="password" placeholder="Password" required
-            className="w-full bg-[#1a1a1a] border border-[#3b3b3b] rounded-lg p-3 outline-none focus:border-blue-500"
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <button disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-lg font-bold transition-all">
-            {loading ? "PROCESSING..." : isSignUp ? "CREATE ACCOUNT" : "SIGN IN"}
+          </div>
+          <div className="relative">
+            <FaLock className="absolute left-4 top-3.5 text-gray-500" />
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-xl border border-[#333] bg-[#252525] py-3 pl-11 pr-4 text-white focus:border-blue-500 focus:outline-none"
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 font-bold text-white transition-all hover:bg-blue-500 disabled:opacity-50"
+          >
+            {loading ? "Processing..." : isSignUp ? <><FaUserPlus /> Sign Up</> : <><FaSignInAlt /> Log In</>}
           </button>
         </form>
-        <button onClick={() => setIsSignUp(!isSignUp)} className="w-full mt-4 text-sm text-gray-400 hover:text-white">
-          {isSignUp ? "Already have an account? Login" : "Need an account? Sign Up"}
-        </button>
+
+        {/* Toggle */}
+        <p className="mt-6 text-center text-sm text-gray-400">
+          {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
+          <button
+            onClick={() => setIsSignUp(!isSignUp)}
+            className="font-semibold text-blue-400 hover:underline"
+          >
+            {isSignUp ? "Log In" : "Sign Up"}
+          </button>
+        </p>
       </div>
-    </main>
+    </div>
   );
 }
