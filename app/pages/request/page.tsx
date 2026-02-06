@@ -1,52 +1,70 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import { FaYoutube, FaPlus, FaTrash, FaPaperPlane, FaAlignLeft } from "react-icons/fa";
+import { FaMusic, FaYoutube, FaClock, FaCheck, FaInfoCircle } from "react-icons/fa";
+import { useToast } from "@/app/context/ToastContext"; 
 
-export default function RequestPage() {
-  const [title, setTitle] = useState("");
-  const [links, setLinks] = useState<string[]>([""]); 
-  const [baseBpm, setBaseBpm] = useState("");
-  const [targetBpm, setTargetBpm] = useState("");
-  
-  // 🛠️ Default is "Dance Class"
-  const [musicType, setMusicType] = useState("Dance Class");
-  const [deadline, setDeadline] = useState("");
-  const [description, setDescription] = useState("");
+export default function RequestSongPage() {
+  const router = useRouter();
+  const { showToast } = useToast(); 
   
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  
+  // Form State
+  const [title, setTitle] = useState("");
+  const [youtubeLinks, setYoutubeLinks] = useState([""]); 
+  const [baseBpm, setBaseBpm] = useState("");
+  const [targetBpm, setTargetBpm] = useState("");
+  const [musicCategory, setMusicCategory] = useState("class music");
+  const [description, setDescription] = useState(""); 
+
+  useEffect(() => {
+    getUser();
+  }, []);
+
+  async function getUser() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        router.push("/auth");
+    } else {
+        setUser(user);
+    }
+  }
+
+  // --- Dynamic Input Handlers ---
+  const handleLinkChange = (index: number, value: string) => {
+    const newLinks = [...youtubeLinks];
+    newLinks[index] = value;
+    setYoutubeLinks(newLinks);
+  };
 
   const addLinkField = () => {
-    setLinks([...links, ""]);
+    if (youtubeLinks.length < 5) {
+        setYoutubeLinks([...youtubeLinks, ""]);
+    } else {
+        showToast("Max 5 links allowed", "info");
+    }
   };
 
   const removeLinkField = (index: number) => {
-    const newLinks = links.filter((_, i) => i !== index);
-    setLinks(newLinks);
+    const newLinks = youtubeLinks.filter((_, i) => i !== index);
+    setYoutubeLinks(newLinks);
   };
 
-  const handleLinkChange = (index: number, value: string) => {
-    const newLinks = [...links];
-    newLinks[index] = value;
-    setLinks(newLinks);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
+    if (!user) return;
 
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      alert("You must be logged in!");
-      router.push("/auth");
-      return;
+    // Validation
+    const validLinks = youtubeLinks.filter(link => link.trim() !== "");
+    if (validLinks.length === 0) {
+        showToast("Please add at least one YouTube link.", "error");
+        return;
     }
 
-    // Filter valid links
-    const validLinks = links.filter(link => link.trim() !== "");
+    setLoading(true);
 
     const { error } = await supabase.from("song_requests").insert([
       {
@@ -55,168 +73,187 @@ export default function RequestPage() {
         youtube_link: validLinks, 
         base_bpm: baseBpm,
         target_bpm: targetBpm,
-        music_category: musicType, // Sends "Dance Class" or "Choreo"
-        deadline: deadline || null,
-        // 🛠️ Logic: Only send description if type is "choreo"
-        description: musicType === "Choreo" ? description : null, 
+        music_category: musicCategory,
+        // Only save description if Choreo is selected (optional cleanup)
+        description: musicCategory === "choreo" ? description : "",
         status: "new",
-        position: 1000 
       },
     ]);
 
     if (error) {
-      alert("Error creating ticket: " + error.message);
+      showToast("Error submitting request: " + error.message, "error");
     } else {
+      showToast("Request submitted successfully!", "success");
       router.push("/pages/user/my-tickets");
     }
     setLoading(false);
-  };
+  }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-[#121212]">
-      <form onSubmit={handleSubmit} className="bg-[#1e1e1e] border border-[#333] p-8 rounded-2xl shadow-2xl w-full max-w-lg relative overflow-hidden">
+    <div className="min-h-screen p-4 sm:p-8 bg-[#121212] text-white flex justify-center items-start pt-10 sm:pt-20">
+      <div className="w-full max-w-2xl bg-[#1e1e1e] border border-[#333] rounded-2xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
         
+        {/* Background Glow */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
 
-        <h1 className="text-3xl font-bold text-white mb-6 text-center tracking-tight">New Request</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold mb-6 flex items-center gap-3 relative z-10">
+          <FaMusic className="text-blue-500" /> New Song Request
+        </h1>
 
-        <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
           
           {/* Title */}
           <div>
-            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Song Title / Artist</label>
-            <input 
-              required 
-              type="text" 
+            <label className="block text-sm font-bold text-gray-400 mb-2">Project Title</label>
+            <input
+              type="text"
+              className="w-full bg-[#252525] border border-[#444] rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none transition-colors"
+              placeholder="e.g. Summer Vibe Mix"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Michael Jackson - Billie Jean" 
-              className="w-full bg-[#252525] border border-[#444] text-white p-3 rounded-xl focus:outline-none focus:border-blue-500 transition-colors"
+              required
             />
           </div>
 
-          {/* Type Selection */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-               <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Type</label>
-               <select 
-                 value={musicType}
-                 onChange={(e) => {
-                    setMusicType(e.target.value);
-                    // Optional: Reset to 1 link if switching back to Dance Class
-                    if (e.target.value === "dance class") setLinks([links[0] || ""]);
-                 }}
-                 className="w-full bg-[#252525] border border-[#444] text-white p-3 rounded-xl focus:outline-none focus:border-blue-500 appearance-none"
-               >
-                 <option value="dance class">Dance Class</option>
-                 <option value="choreo">Choreo</option>
-               </select>
-            </div>
-            <div>
-               <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Deadline</label>
-               <input 
-                 type="date" 
-                 value={deadline}
-                 onChange={(e) => setDeadline(e.target.value)}
-                 className="w-full bg-[#252525] border border-[#444] text-white p-3 rounded-xl focus:outline-none focus:border-blue-500"
-               />
-            </div>
-          </div>
-
-          {/* 🎥 YouTube Links */}
+          {/* YouTube Links (Dynamic Array) */}
           <div>
-            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">YouTube Reference(s)</label>
-            <div className="space-y-2">
-              {links.map((link, index) => (
-                <div key={index} className="flex gap-2">
-                  <div className="relative flex-1">
-                    <FaYoutube className="absolute left-3 top-3.5 text-red-500" />
-                    <input 
-                      type="text" 
-                      value={link}
-                      onChange={(e) => handleLinkChange(index, e.target.value)}
-                      placeholder="Paste YouTube Link" 
-                      className="w-full bg-[#252525] border border-[#444] text-white py-3 pl-10 pr-4 rounded-xl focus:outline-none focus:border-red-500 transition-colors"
-                    />
-                  </div>
-                  {/* Delete button: Only show if >1 link AND type is Choreo (or just if >1 link generally) */}
-                  {links.length > 1 && (
-                    <button 
-                      type="button" 
-                      onClick={() => removeLinkField(index)}
-                      className="p-3 bg-[#2a2a2a] text-gray-400 hover:text-red-500 rounded-xl border border-[#444] transition-colors"
-                    >
-                      <FaTrash />
-                    </button>
-                  )}
-                </div>
-              ))}
+            <label className="block text-sm font-bold text-gray-400 mb-2 flex justify-between">
+                <span>YouTube Links</span>
+                {/* Only show 'Add up to 5' hint if Choreo */}
+                {musicCategory === "choreo" && <span className="text-xs font-normal text-gray-500">Add up to 5</span>}
+            </label>
+            <div className="space-y-3">
+                {youtubeLinks.map((link, index) => (
+                    <div key={index} className="flex gap-2">
+                        <div className="relative flex-1">
+                            <FaYoutube className="absolute left-3 top-3.5 text-red-500" />
+                            <input
+                                type="url"
+                                className="w-full bg-[#252525] border border-[#444] rounded-xl p-3 pl-10 text-white focus:border-blue-500 focus:outline-none transition-colors"
+                                placeholder="https://youtube.com/..."
+                                value={link}
+                                onChange={(e) => handleLinkChange(index, e.target.value)}
+                                required={index === 0} 
+                            />
+                        </div>
+                        {youtubeLinks.length > 1 && (
+                            <button 
+                                type="button" 
+                                onClick={() => removeLinkField(index)}
+                                className="px-3 py-2 bg-red-900/20 text-red-400 rounded-xl hover:bg-red-900/40 transition-colors text-sm font-bold"
+                            >
+                                ✕
+                            </button>
+                        )}
+                    </div>
+                ))}
             </div>
             
-            {/* 🛠️ Add Button - Only visible for Choreo */}
-            {musicType === "choreo" && (
-              <button 
-                type="button" 
-                onClick={addLinkField}
-                className="mt-2 text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors animate-in fade-in"
-              >
-                <FaPlus /> Add Another Link
-              </button>
+            {/* 🛠️ CONDITIONAL ADD BUTTON: Only show if Choreo */}
+            {musicCategory === "choreo" && youtubeLinks.length < 5 && (
+                <button 
+                    type="button" 
+                    onClick={addLinkField}
+                    className="mt-3 text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1"
+                >
+                    + Add Another Link
+                </button>
             )}
           </div>
 
-          {/* BPMs */}
+          {/* BPM Range */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Current BPM</label>
-              <input 
-                type="text" 
-                value={baseBpm}
-                onChange={(e) => setBaseBpm(e.target.value)}
-                placeholder="e.g. 128" 
-                className="w-full bg-[#252525] border border-[#444] text-white p-3 rounded-xl focus:outline-none focus:border-blue-500"
-              />
+              <label className="block text-sm font-bold text-gray-400 mb-2">Base BPM</label>
+              <div className="relative">
+                <FaClock className="absolute left-3 top-3.5 text-gray-500" />
+                <input
+                  type="number"
+                  className="w-full bg-[#252525] border border-[#444] rounded-xl p-3 pl-10 text-white focus:border-blue-500 focus:outline-none transition-colors"
+                  placeholder="120"
+                  value={baseBpm}
+                  onChange={(e) => setBaseBpm(e.target.value)}
+                  required
+                />
+              </div>
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Target BPM</label>
-              <input 
-                type="text" 
-                value={targetBpm}
-                onChange={(e) => setTargetBpm(e.target.value)}
-                placeholder="e.g. 130" 
-                className="w-full bg-[#252525] border border-[#444] text-white p-3 rounded-xl focus:outline-none focus:border-blue-500"
-              />
+              <label className="block text-sm font-bold text-gray-400 mb-2">Target BPM</label>
+              <div className="relative">
+                <FaClock className="absolute left-3 top-3.5 text-gray-500" />
+                <input
+                  type="number"
+                  className="w-full bg-[#252525] border border-[#444] rounded-xl p-3 pl-10 text-white focus:border-blue-500 focus:outline-none transition-colors"
+                  placeholder="128"
+                  value={targetBpm}
+                  onChange={(e) => setTargetBpm(e.target.value)}
+                  required
+                />
+              </div>
             </div>
           </div>
 
-          {/* 📝 Description - Only visible for Choreo */}
-          {musicType === "choreo" && (
+          {/* Category Selection */}
+          <div>
+            <label className="block text-sm font-bold text-gray-400 mb-2">Category</label>
+            <div className="grid grid-cols-2 gap-4">
+                <button
+                    type="button"
+                    onClick={() => {
+                        setMusicCategory("class music");
+                        // Optional: Reset links to 1 when switching back to Class Music?
+                        // setYoutubeLinks([youtubeLinks[0]]); 
+                    }}
+                    className={`p-4 rounded-xl border transition-all font-bold text-center
+                        ${musicCategory === "class music" 
+                            ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20" 
+                            : "bg-[#252525] border-[#444] text-gray-400 hover:border-gray-300"
+                        }
+                    `}
+                >
+                    Class Music
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setMusicCategory("choreo")}
+                    className={`p-4 rounded-xl border transition-all font-bold text-center
+                        ${musicCategory === "choreo" 
+                            ? "bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-900/20" 
+                            : "bg-[#252525] border-[#444] text-gray-400 hover:border-gray-300"
+                        }
+                    `}
+                >
+                    Choreo
+                </button>
+            </div>
+          </div>
+
+          {/* 🛠️ CONDITIONAL DESCRIPTION: Only show if Choreo */}
+          {musicCategory === "choreo" && (
             <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-               <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
-                 Choreography Instructions
-               </label>
-               <div className="relative">
-                 <FaAlignLeft className="absolute left-3 top-3.5 text-gray-500" />
-                 <textarea 
-                   value={description}
-                   onChange={(e) => setDescription(e.target.value)}
-                   placeholder="Describe the cuts, structure, or specific details..."
-                   rows={4}
-                   className="w-full bg-[#252525] border border-[#444] text-white py-3 pl-10 pr-4 rounded-xl focus:outline-none focus:border-blue-500 transition-colors resize-none"
-                 />
-               </div>
+                <label className="block text-sm font-bold text-gray-400 mb-2 flex items-center gap-2">
+                    Description <FaInfoCircle className="text-gray-600" title="Add specific details or instructions" />
+                </label>
+                <textarea
+                className="w-full bg-[#252525] border border-[#444] rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none transition-colors min-h-[100px] resize-y"
+                placeholder="Any specific instructions, cuts, or vibe details..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                />
             </div>
           )}
 
-          <button 
-            type="submit" 
+          {/* Submit Button */}
+          <button
+            type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl mt-4 transition-all transform active:scale-95 shadow-lg flex items-center justify-center gap-2"
+            className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-900/20 transition-all transform active:scale-[0.98] flex items-center justify-center gap-2"
           >
-            {loading ? "Sending..." : <><FaPaperPlane /> Submit Request</>}
+            {loading ? "Submitting..." : <><FaCheck /> Submit Request</>}
           </button>
-        </div>
-      </form>
+
+        </form>
+      </div>
     </div>
   );
 }
