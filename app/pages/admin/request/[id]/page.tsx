@@ -19,6 +19,7 @@ import {
   FaYoutube
 } from "react-icons/fa";
 import { getYouTubeThumbnail } from "@/app/lib/utils";
+import { useToast } from "@/app/context/ToastContext"; // 👈 Import Hook
 
 // Helper component for the Choreo Diagonal Montage
 const ChoreoMontage = ({ images }: { images: string[] }) => {
@@ -43,6 +44,7 @@ const ChoreoMontage = ({ images }: { images: string[] }) => {
 export default function RequestDetailPage() {
   const { id } = useParams();
   const router = useRouter();
+  const { showToast } = useToast(); // 👈 Use Hook
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -122,10 +124,10 @@ export default function RequestDetailPage() {
         .eq("id", id);
 
       if (error) throw error;
-      alert("Changes saved!");
+      showToast("Changes saved successfully!", "success"); // 👈 Use Toast
 
     } catch (error) {
-      alert("Error saving changes");
+      showToast("Error saving changes.", "error"); // 👈 Use Toast
       console.error(error);
     } finally {
       setSaving(false);
@@ -135,14 +137,24 @@ export default function RequestDetailPage() {
   // 🔄 UPDATE STATUS
   async function updateStatus(newStatus: string) {
     setTicket((prev: any) => ({ ...prev, status: newStatus }));
-    await supabase.from("song_requests").update({ status: newStatus }).eq("id", id);
+    const { error } = await supabase.from("song_requests").update({ status: newStatus }).eq("id", id);
+    if (error) {
+       showToast("Failed to update status", "error");
+    } else {
+       showToast(`Status updated to ${newStatus}`, "success");
+    }
   }
 
   // 🗑️ DELETE REQUEST
   async function deleteTicket() {
     if(!confirm("Are you sure you want to delete this request permanently?")) return;
-    await supabase.from("song_requests").delete().eq("id", id);
-    router.push("/pages/admin");
+    const { error } = await supabase.from("song_requests").delete().eq("id", id);
+    if (error) {
+        showToast("Failed to delete request", "error");
+    } else {
+        showToast("Request deleted", "info");
+        router.push("/pages/admin");
+    }
   }
 
   // Helper for Status Badges
