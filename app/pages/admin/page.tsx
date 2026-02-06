@@ -17,11 +17,14 @@ import {
   FaCheckCircle,
   FaUsers,
   FaAlignLeft,
-  FaYoutube
+  FaYoutube,
+  FaLongArrowAltRight,
+  FaExclamationTriangle
 } from "react-icons/fa";
 import { getYouTubeThumbnail } from "@/app/lib/utils";
 import Link from "next/link";
 import { CarouselThumbnail, BackgroundCarousel } from "@/app/components/TicketCarousels";
+import { useToast } from "@/app/context/ToastContext";
 
 type Ticket = {
   id: number;
@@ -49,7 +52,7 @@ const columns = [
   { id: "done", title: "DONE", color: "bg-green-600", border: "border-green-500" },
 ];
 
-const DraggableCard = ({ ticket, index, col, handleDelete, advanceStatus }: any) => {
+const DraggableCard = ({ ticket, index, col, confirmDelete, advanceStatus }: any) => {
   const [imgError, setImgError] = useState(false);
   
   const links = Array.isArray(ticket.youtube_link) ? ticket.youtube_link : (ticket.youtube_link ? [ticket.youtube_link] : []);
@@ -61,7 +64,6 @@ const DraggableCard = ({ ticket, index, col, handleDelete, advanceStatus }: any)
   const hasValidImage = thumbnails.length > 0 && !imgError;
   const extraLinksCount = Math.max(0, links.length - 1);
 
-  // Badge Logic
   const isChoreo = (ticket.music_category || "").toLowerCase() === "choreo";
 
   return (
@@ -72,8 +74,10 @@ const DraggableCard = ({ ticket, index, col, handleDelete, advanceStatus }: any)
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           style={{ ...provided.draggableProps.style }}
-          className={`border border-[#333] rounded-xl mb-3 shadow-lg group relative overflow-hidden
-            transition-all duration-200 ease-in-out hover:border-gray-500 flex flex-col
+          // 🛠️ FIX: Removed 'transition-all' to prevent drag-drop glitches. 
+          // Replaced with specific transitions (colors, borders, shadows) so layout shifts are instant.
+          className={`border border-[#333] rounded-xl mb-3 shadow-lg group relative overflow-hidden flex flex-col
+            hover:border-gray-500 transition-colors duration-200
             ${snapshot.isDragging ? "shadow-2xl ring-2 ring-blue-500 rotate-2 opacity-90 z-50" : ""}
             ${!hasValidImage ? "bg-[#1e1e1e]" : ""} 
           `}
@@ -96,7 +100,7 @@ const DraggableCard = ({ ticket, index, col, handleDelete, advanceStatus }: any)
           {/* Content */}
           <div className="relative z-10 p-4">
             
-            {/* 🏷️ TYPE BADGE */}
+            {/* Badge */}
             <div className="absolute top-3 right-4 z-10 transition-opacity duration-200 group-hover:opacity-0">
                <span className={`text-[10px] px-2 py-0.5 rounded border uppercase font-bold tracking-wider backdrop-blur-md shadow-sm
                  ${isChoreo 
@@ -107,9 +111,9 @@ const DraggableCard = ({ ticket, index, col, handleDelete, advanceStatus }: any)
                </span>
             </div>
 
-            {/* Delete Button (On Hover) */}
+            {/* Delete Button */}
             <button
-              onClick={() => handleDelete(ticket.id)}
+              onClick={() => confirmDelete(ticket.id)}
               className="absolute top-0 right-0 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-20 p-2.5 hover:bg-black/50 rounded-bl-lg"
               title="Delete Ticket"
             >
@@ -180,16 +184,21 @@ const DraggableCard = ({ ticket, index, col, handleDelete, advanceStatus }: any)
 
               {/* Text Info */}
               <div className="min-w-0 flex-1">
-                <Link href={`/pages/admin/request/${ticket.id}`} className="group/title block">
+                <Link href={`/pages/request/${ticket.id}`} className="group/title block">
                   <h3 className="text-sm font-bold text-white truncate leading-tight mb-1 group-hover/title:text-blue-300 transition-colors drop-shadow-sm pr-16" title={ticket.title}>
                     {ticket.title}
                   </h3>
                 </Link>
 
                 <div className="flex flex-wrap gap-1.5 mt-2">
-                  <span className="text-[10px] bg-black/50 text-gray-300 px-2 py-0.5 rounded border border-white/10 backdrop-blur-sm">
-                    {ticket.base_bpm || "?"} ➝ {ticket.target_bpm || "?"}
+                  {/* BPM Badge */}
+                  <span className="text-[10px] bg-black/50 text-gray-300 px-2 py-0.5 rounded border border-white/10 backdrop-blur-sm font-mono flex items-center">
+                    <span className="text-gray-500 font-bold mr-1">BPM:</span> 
+                    <span className="text-white font-bold">{ticket.base_bpm || "?"}</span>
+                    <FaLongArrowAltRight className="mx-1 text-gray-500" />
+                    <span className="text-white font-bold">{ticket.target_bpm || "?"}</span>
                   </span>
+
                   {ticket.deadline && (
                     <span className="text-[10px] bg-black/50 text-gray-300 px-2 py-0.5 rounded border border-white/10 flex items-center gap-1 backdrop-blur-sm">
                       <FaClock size={8} /> {ticket.deadline}
@@ -198,14 +207,6 @@ const DraggableCard = ({ ticket, index, col, handleDelete, advanceStatus }: any)
                 </div>
               </div>
             </div>
-
-            {/* Description */}
-            {ticket.description && (
-                <div className="mb-3 px-2 py-1.5 bg-black/20 rounded border border-white/5 flex gap-2 items-start">
-                    <FaAlignLeft className="text-gray-500 text-[10px] mt-1 shrink-0" />
-                    <p className="text-[10px] text-gray-400 line-clamp-2">{ticket.description}</p>
-                </div>
-            )}
 
             {/* Action Button */}
             {col.id !== "done" && (
@@ -238,7 +239,10 @@ export default function AdminPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const { showToast } = useToast();
   const router = useRouter();
+
+  const [ticketToDelete, setTicketToDelete] = useState<number | null>(null);
 
   useEffect(() => { checkAdmin(); }, []);
 
@@ -286,10 +290,25 @@ export default function AdminPage() {
     await supabase.from("song_requests").update({ status: newStatus, position: newPosition }).eq("id", draggableId);
   }
 
-  async function handleDelete(id: number) {
-    if (!confirm("Delete this ticket?")) return;
-    setTickets((prev) => prev.filter((t) => t.id !== id));
-    await supabase.from("song_requests").delete().eq("id", id);
+  function confirmDelete(id: number) {
+    setTicketToDelete(id);
+  }
+
+  async function executeDelete() {
+    if (!ticketToDelete) return;
+    
+    const previousTickets = [...tickets];
+    setTickets((prev) => prev.filter((t) => t.id !== ticketToDelete));
+    setTicketToDelete(null);
+
+    const { error } = await supabase.from("song_requests").delete().eq("id", ticketToDelete);
+    
+    if (error) {
+      setTickets(previousTickets);
+      showToast("Failed to delete ticket", "error");
+    } else {
+      showToast("Ticket deleted successfully", "info");
+    }
   }
 
   async function advanceStatus(ticket: Ticket) {
@@ -309,10 +328,9 @@ export default function AdminPage() {
   if (!isAdmin) return null;
 
   return (
-    // 🛠️ RESPONSIVE CONTAINER: p-4 on mobile, p-8 on desktop
-    <div className="min-h-screen p-4 md:p-8 max-w-[1600px] mx-auto">
+    <div className="min-h-screen p-4 md:p-8 max-w-[1600px] mx-auto relative">
       
-      {/* 🛠️ RESPONSIVE HEADER: Flex column on mobile, row on desktop */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8">
         <h1 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-3">
           <span className="bg-red-600 text-xs px-2 py-1 rounded text-white font-bold tracking-wider">ADMIN</span> Dashboard
@@ -323,7 +341,6 @@ export default function AdminPage() {
       </div>
 
       <DragDropContext onDragEnd={onDragEnd}>
-        {/* 🛠️ RESPONSIVE GRID: 1 col (mobile), 2 cols (tablet), 4 cols (desktop) */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
           {columns.map((col) => (
             <div key={col.id} className="flex flex-col h-full">
@@ -339,7 +356,7 @@ export default function AdminPage() {
                 {(provided, snapshot) => (
                   <div ref={provided.innerRef} {...provided.droppableProps} className={`flex-1 rounded-xl p-2 transition-colors min-h-[500px] ${snapshot.isDraggingOver ? "bg-[#252525]/50 border-2 border-dashed border-[#444]" : ""}`}>
                     {tickets.filter((t) => t.status === col.id).map((ticket, index) => (
-                      <DraggableCard key={ticket.id} ticket={ticket} index={index} col={col} handleDelete={handleDelete} advanceStatus={advanceStatus} />
+                      <DraggableCard key={ticket.id} ticket={ticket} index={index} col={col} confirmDelete={confirmDelete} advanceStatus={advanceStatus} />
                     ))}
                     {provided.placeholder}
                   </div>
@@ -349,6 +366,43 @@ export default function AdminPage() {
           ))}
         </div>
       </DragDropContext>
+
+      {/* 🗑️ DELETE CONFIRMATION MODAL */}
+      {ticketToDelete !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#1e1e1e] border border-[#333] rounded-2xl p-6 max-w-sm w-full shadow-2xl relative transform transition-all scale-100">
+            
+            <div className="flex flex-col items-center text-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 text-xl">
+                <FaExclamationTriangle />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Delete Request?</h3>
+                <p className="text-sm text-gray-400 mt-1">
+                  Are you sure you want to delete this ticket? This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button 
+                onClick={() => setTicketToDelete(null)}
+                className="flex-1 py-2.5 rounded-lg font-bold text-sm bg-[#2a2a2a] hover:bg-[#333] text-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={executeDelete}
+                className="flex-1 py-2.5 rounded-lg font-bold text-sm bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/20 transition-all"
+              >
+                Delete
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
