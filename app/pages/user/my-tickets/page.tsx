@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import Link from "next/link"; // 👈 Import Link
 import { 
   FaMusic, 
   FaClock, 
@@ -13,7 +14,6 @@ import {
   FaHourglassHalf 
 } from "react-icons/fa";
 import { getYouTubeThumbnail } from "@/app/lib/utils";
-// 🛠️ IMPORT THE NEW COMPONENTS
 import { CarouselThumbnail, BackgroundCarousel } from "@/app/components/TicketCarousels";
 
 type Ticket = {
@@ -83,6 +83,9 @@ export default function MyTicketsPage() {
             
             const hasMultipleImages = thumbnails.length > 1;
             const mainCover = thumbnails[0] || "";
+            
+            // 🛑 LOGIC: Check if it is a 'choreo' request
+            const isChoreo = (ticket.music_category || "").toLowerCase() === 'choreo';
 
             return (
               <div 
@@ -111,9 +114,12 @@ export default function MyTicketsPage() {
                   
                   {/* Header */}
                   <div className="flex justify-between items-start mb-4">
-                    <h2 className="text-lg font-bold text-white leading-tight drop-shadow-md truncate pr-4">
-                      {ticket.title}
-                    </h2>
+                    {/* 🔗 LINK TITLE: Wraps only the title text */}
+                    <Link href={`/pages/request/${ticket.id}`} className="block pr-4 flex-1">
+                        <h2 className="text-lg font-bold text-white leading-tight drop-shadow-md truncate hover:text-blue-400 transition-colors">
+                          {ticket.title}
+                        </h2>
+                    </Link>
                     
                     <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider border flex items-center gap-1.5 shadow-sm shrink-0
                       ${ticket.status === 'done' ? 'bg-green-600 text-white border-green-400' : 
@@ -160,7 +166,7 @@ export default function MyTicketsPage() {
                     <div className="flex-1 space-y-3 w-full">
                        <div className="flex items-center gap-2">
                           <span className={`px-2.5 py-1 rounded text-[11px] border tracking-wide font-bold shadow-sm
-                            ${(ticket.music_category || "").toLowerCase() === 'choreo' 
+                            ${isChoreo 
                                ? 'bg-purple-900/40 text-purple-200 border-purple-700' 
                                : 'bg-blue-900/40 text-blue-200 border-blue-700'}
                           `}>
@@ -182,8 +188,8 @@ export default function MyTicketsPage() {
                     </div>
                   </div>
 
-                  {/* Description */}
-                  {ticket.description && (
+                  {/* Description: HIDDEN if isChoreo is true */}
+                  {!isChoreo && ticket.description && (
                     <div className="mt-auto pt-3 border-t border-white/5">
                       <div className="flex items-start gap-2 text-xs text-gray-300 bg-black/20 p-3 rounded-lg border border-white/5">
                         <FaAlignLeft className="mt-0.5 text-gray-500 shrink-0" />
