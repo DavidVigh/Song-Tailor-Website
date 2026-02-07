@@ -2,11 +2,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { useToast } from "@/app/context/ToastContext"; 
 
 import { 
   FaCamera, 
   FaChevronLeft, 
-  FaSave, 
   FaTicketAlt, 
   FaSignOutAlt, 
   FaEnvelope, 
@@ -17,7 +17,8 @@ import {
   FaChevronRight,
   FaExternalLinkAlt,
   FaQuestionCircle,
-  FaTimes
+  FaTimes,
+  FaPen 
 } from "react-icons/fa";
 
 // --- HELP MODAL COMPONENT (Unchanged) ---
@@ -26,8 +27,13 @@ function SocialHelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-all">
-      <div className="bg-[#222] border border-[#333] w-full max-w-sm rounded-3xl p-6 shadow-2xl relative">
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">
+      <div className="w-full max-w-sm rounded-3xl p-6 shadow-2xl relative
+        /* ☀️ Light Mode */
+        bg-white border-gray-200 text-gray-900
+        /* 🌙 Dark Mode */
+        dark:bg-[#222] dark:border-[#333] dark:text-white"
+      >
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors">
           <FaTimes className="text-xl" />
         </button>
         <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
@@ -35,32 +41,41 @@ function SocialHelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
           <span>How to find your info</span>
         </h3>
         <div className="mb-6">
-          <div className="flex items-center gap-2 mb-3 text-blue-400 font-bold text-sm uppercase tracking-wide">
+          <div className="flex items-center gap-2 mb-3 text-blue-500 font-bold text-sm uppercase tracking-wide">
             <FaFacebook /> Facebook (2 Ways)
           </div>
           <div className="mb-3">
-            <p className="text-xs text-gray-400 mb-1">Option 1: Username</p>
-            <div className="bg-[#111] p-2 rounded-lg border border-[#333] font-mono text-[10px] text-gray-500 break-all">
-              facebook.com/<span className="text-green-400 font-bold">david.vigh</span>
+            <p className="text-xs text-gray-500 mb-1">Option 1: Username</p>
+            <div className="p-2 rounded-lg border font-mono text-[10px] break-all
+              bg-gray-100 border-gray-200 text-gray-600
+              dark:bg-[#111] dark:border-[#333] dark:text-gray-500"
+            >
+              facebook.com/<span className="text-green-600 dark:text-green-400 font-bold">user.name</span>
             </div>
           </div>
           <div>
-            <p className="text-xs text-gray-400 mb-1">Option 2: Profile ID</p>
-            <div className="bg-[#111] p-2 rounded-lg border border-[#333] font-mono text-[10px] text-gray-500 break-all">
-              facebook.com/profile.php?id=<span className="text-green-400 font-bold">1000123456789</span>
+            <p className="text-xs text-gray-500 mb-1">Option 2: Profile ID</p>
+            <div className="p-2 rounded-lg border font-mono text-[10px] break-all
+              bg-gray-100 border-gray-200 text-gray-600
+              dark:bg-[#111] dark:border-[#333] dark:text-gray-500"
+            >
+              facebook.com/profile.php?id=<span className="text-green-600 dark:text-green-400 font-bold">1000123456789</span>
             </div>
           </div>
         </div>
-        <div className="w-full h-px bg-[#333] mb-6"></div>
+        <div className="w-full h-px bg-gray-200 dark:bg-[#333] mb-6"></div>
         <div className="mb-2">
-          <div className="flex items-center gap-2 mb-2 text-pink-400 font-bold text-sm uppercase tracking-wide">
+          <div className="flex items-center gap-2 mb-2 text-pink-500 font-bold text-sm uppercase tracking-wide">
             <FaInstagram /> Instagram
           </div>
-          <p className="text-sm text-gray-400 mb-2">
+          <p className="text-sm text-gray-500 mb-2">
             Just enter your <strong>Instagram Handle</strong> (without the @).
           </p>
-          <div className="bg-[#111] p-3 rounded-lg border border-[#333] font-mono text-xs text-gray-500">
-            @<span className="text-green-400 font-bold">your_username</span>
+          <div className="p-3 rounded-lg border font-mono text-xs
+            bg-gray-100 border-gray-200 text-gray-600
+            dark:bg-[#111] dark:border-[#333] dark:text-gray-500"
+          >
+            @<span className="text-green-600 dark:text-green-400 font-bold">your_username</span>
           </div>
         </div>
         <button onClick={onClose} className="w-full mt-6 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all">
@@ -74,13 +89,15 @@ function SocialHelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
 // --- MAIN PAGE COMPONENT ---
 export default function ProfilePage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [showHelp, setShowHelp] = useState(false);
+  
+  const [isEditing, setIsEditing] = useState(false);
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -89,8 +106,6 @@ export default function ProfilePage() {
     instagram: "",
     avatarUrl: "",
   });
-
-  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
     getProfile();
@@ -152,7 +167,6 @@ export default function ProfilePage() {
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
       setUploadingImage(true);
-      setMessage(null);
       if (!event.target.files || event.target.files.length === 0) throw new Error("No file selected.");
 
       const file = event.target.files[0];
@@ -173,9 +187,9 @@ export default function ProfilePage() {
       if (updateError) throw updateError;
 
       setFormData(prev => ({ ...prev, avatarUrl: publicUrl }));
-      setMessage({ type: 'success', text: "Avatar updated successfully!" });
+      showToast("Avatar updated successfully!", "success");
     } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || "Error uploading!" });
+      showToast(error.message || "Error uploading!", "error");
     } finally {
       setUploadingImage(false);
     }
@@ -183,8 +197,6 @@ export default function ProfilePage() {
 
   async function updateProfile() {
     try {
-      setUpdating(true);
-      setMessage(null);
       const fullFacebook = buildUrl(formData.facebook, "facebook.com");
       const fullInstagram = buildUrl(formData.instagram, "instagram.com");
 
@@ -198,12 +210,9 @@ export default function ProfilePage() {
       });
 
       if (error) throw error;
-      setMessage({ type: 'success', text: "Changes saved!" });
-      router.refresh();
+      showToast("Profile saved", "success");
     } catch (error) {
-      setMessage({ type: 'error', text: "Error updating profile!" });
-    } finally {
-      setUpdating(false);
+      showToast("Error updating profile!", "error");
     }
   }
 
@@ -217,15 +226,20 @@ export default function ProfilePage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#1a1a1a] text-white font-sans">
+    <main className="min-h-screen font-sans
+      /* ☀️ Light Mode */
+      bg-gray-50 text-gray-900
+      /* 🌙 Dark Mode */
+      dark:bg-[#1a1a1a] dark:text-white"
+    >
       <SocialHelpModal isOpen={showHelp} onClose={() => setShowHelp(false)} />
 
       {/* Header */}
-      <div className="relative h-48 bg-gradient-to-r from-blue-900 to-[#1a1a1a]">
-        <div className="absolute top-6 left-6 cursor-pointer p-2 hover:bg-white/10 rounded-full transition-colors" onClick={() => router.back()}>
+      <div className="relative h-48 bg-gradient-to-r from-blue-600 to-blue-900 dark:from-blue-900 dark:to-[#1a1a1a]">
+        <div className="absolute top-6 left-6 cursor-pointer p-2 hover:bg-white/10 rounded-full transition-colors text-white" onClick={() => router.back()}>
           <FaChevronLeft className="text-xl" />
         </div>
-        <div className="absolute w-full top-8 text-center font-bold text-lg tracking-wide uppercase pointer-events-none">
+        <div className="absolute w-full top-8 text-center font-bold text-lg tracking-wide uppercase pointer-events-none text-white">
           Profile
         </div>
       </div>
@@ -234,7 +248,12 @@ export default function ProfilePage() {
         
         {/* Avatar */}
         <div className="relative group cursor-pointer" onClick={() => !uploadingImage && fileInputRef.current?.click()}>
-            <div className="w-28 h-28 rounded-full bg-[#2b2b2b] border-4 border-[#1a1a1a] flex items-center justify-center shadow-xl mb-3 overflow-hidden group-hover:border-blue-500/50 transition-colors">
+            <div className="w-28 h-28 rounded-full flex items-center justify-center shadow-xl mb-3 overflow-hidden transition-colors border-4
+              /* ☀️ Light Mode */
+              bg-white border-white
+              /* 🌙 Dark Mode */
+              dark:bg-[#2b2b2b] dark:border-[#1a1a1a] dark:group-hover:border-blue-500/50"
+            >
             {formData.avatarUrl ? (
                 <img src={formData.avatarUrl} alt="Avatar" className="w-full h-full object-cover"/>
             ) : (
@@ -243,64 +262,125 @@ export default function ProfilePage() {
             <div className="absolute inset-0 bg-black/0 transition-colors" />
             </div>
             <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden"/>
-            <div className="absolute bottom-4 right-0 bg-[#3b3b3b] p-2 rounded-full border border-[#1a1a1a] transition-all shadow-sm group-hover:opacity-0 flex items-center justify-center">
-                {uploadingImage ? <span className="text-xs animate-pulse">...</span> : <FaCamera className="text-sm text-gray-300" />}
+            <div className="absolute bottom-4 right-0 p-2 rounded-full border transition-all shadow-sm group-hover:opacity-0 flex items-center justify-center
+              /* ☀️ Light Mode */
+              bg-gray-100 border-white
+              /* 🌙 Dark Mode */
+              dark:bg-[#3b3b3b] dark:border-[#1a1a1a]"
+            >
+                {uploadingImage ? <span className="text-xs animate-pulse">...</span> : <FaCamera className="text-sm text-gray-500 dark:text-gray-300" />}
             </div>
         </div>
 
-        <h2 className="text-xl font-bold">{formData.fullName || "User"}</h2>
-        <p className="text-gray-500 text-sm mb-6">{formData.phone || "No phone added"}</p>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white">{formData.fullName || "User"}</h2>
+        <p className="text-sm mb-6 text-gray-500 dark:text-gray-500">{formData.phone || "No phone added"}</p>
 
         {/* Info Card */}
-        <div className="w-full max-w-md bg-[#222222] rounded-3xl p-6 shadow-2xl border border-[#333]">
+        <div className="w-full max-w-md rounded-3xl p-6 pt-12 shadow-xl border relative
+          /* ☀️ Light Mode */
+          bg-white border-gray-200
+          /* 🌙 Dark Mode */
+          dark:bg-[#222222] dark:border-[#333] dark:shadow-2xl"
+        >
           
+          {/* 🆕 EDIT BUTTON - Positioned absolutely in the top right corner with padding */}
+          <div className="absolute top-4 right-4">
+            <button 
+              onClick={() => setIsEditing(!isEditing)}
+              className={`p-2 rounded-full transition-all
+                ${isEditing 
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30" 
+                  : "bg-gray-100 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:bg-[#333] dark:text-gray-500 dark:hover:bg-[#444] dark:hover:text-blue-400"
+                }`}
+            >
+              <FaPen size={12} />
+            </button>
+          </div>
+
           {/* Email */}
-          <div className="flex justify-between items-center py-4 border-b border-[#333]">
+          <div className="flex justify-between items-center py-4 border-b border-gray-100 dark:border-[#333]">
             <div className="flex items-center gap-3">
-                <FaEnvelope className="text-gray-500" />
-                <span className="text-sm font-bold text-gray-400">Email</span>
+                <FaEnvelope className="text-gray-400 dark:text-gray-500" />
+                <span className="text-sm font-bold text-gray-600 dark:text-gray-400">Email</span>
             </div>
             <span className="text-sm text-gray-500 truncate max-w-[180px]">{user?.email}</span>
           </div>
 
           {/* Name */}
-          <div className="flex justify-between items-center py-4 border-b border-[#333]">
+          <div className="flex justify-between items-center py-4 border-b border-gray-100 dark:border-[#333]">
             <div className="flex items-center gap-3">
-                <FaUser className="text-gray-500" />
-                <span className="text-sm font-bold text-gray-400">Name</span>
+                <FaUser className="text-gray-400 dark:text-gray-500" />
+                <span className="text-sm font-bold text-gray-600 dark:text-gray-400">Name</span>
             </div>
-            <input type="text" name="fullName" value={formData.fullName} onChange={handleChange} placeholder="Your Name"
-              className="bg-transparent text-right text-sm font-semibold text-blue-400 outline-none w-2/3 placeholder-gray-600 focus:text-white transition-colors"/>
+            <input 
+              type="text" 
+              name="fullName" 
+              value={formData.fullName} 
+              onChange={handleChange} 
+              onBlur={updateProfile}
+              disabled={!isEditing} 
+              placeholder="Your Name"
+              className={`bg-transparent text-right text-sm font-semibold outline-none w-2/3 transition-all rounded px-2
+                ${isEditing 
+                  ? "text-blue-600 placeholder-blue-300 bg-blue-50/50 dark:bg-blue-900/20 dark:text-blue-400" 
+                  : "text-gray-800 placeholder-gray-400 dark:text-gray-300 dark:placeholder-gray-600"
+                }`}
+            />
           </div>
 
           {/* Phone */}
-          <div className="flex justify-between items-center py-4 border-b border-[#333]">
+          <div className="flex justify-between items-center py-4 border-b border-gray-100 dark:border-[#333]">
             <div className="flex items-center gap-3">
-                <FaPhone className="text-gray-500" />
-                <span className="text-sm font-bold text-gray-400">Phone</span>
+                <FaPhone className="text-gray-400 dark:text-gray-500" />
+                <span className="text-sm font-bold text-gray-600 dark:text-gray-400">Phone</span>
             </div>
-            <input type="tel" name="phone" value={formData.phone} onChange={handleChange} placeholder="+36..."
-              className="bg-transparent text-right text-sm text-gray-300 outline-none w-2/3 placeholder-gray-600 focus:text-white transition-colors"/>
+            <input 
+              type="tel" 
+              name="phone" 
+              value={formData.phone} 
+              onChange={handleChange} 
+              onBlur={updateProfile}
+              disabled={!isEditing} 
+              placeholder="+36..."
+              className={`bg-transparent text-right text-sm outline-none w-2/3 transition-all rounded px-2
+                ${isEditing 
+                  ? "text-blue-600 placeholder-blue-300 bg-blue-50/50 dark:bg-blue-900/20 dark:text-blue-400" 
+                  : "text-gray-800 placeholder-gray-400 dark:text-gray-300 dark:placeholder-gray-600"
+                }`}
+            />
           </div>
 
           {/* Facebook */}
-          <div className="flex justify-between items-center py-4 border-b border-[#333]">
+          <div className="flex justify-between items-center py-4 border-b border-gray-100 dark:border-[#333]">
             <div className="flex items-center gap-2">
                 <FaFacebook className="text-blue-600 text-lg" />
-                <span className="text-sm font-bold text-gray-400 hidden sm:block">Facebook</span>
-                <FaQuestionCircle className="text-gray-600 hover:text-white cursor-pointer text-xs" onClick={() => setShowHelp(true)} />
+                <span className="text-sm font-bold text-gray-600 dark:text-gray-400 hidden sm:block">Facebook</span>
+                <FaQuestionCircle className="text-gray-400 hover:text-gray-600 dark:text-gray-600 dark:hover:text-white cursor-pointer text-xs" onClick={() => setShowHelp(true)} />
             </div>
             
-            <div className="flex items-center gap-2 w-2/3 justify-end">
-                <input type="text" name="facebook" value={formData.facebook} onChange={handleChange} placeholder="Username or ID"
-                  className="bg-transparent text-right text-sm text-blue-600 outline-none w-full placeholder-gray-600 focus:text-blue-400 transition-colors"/>
+            <div className="flex items-center w-2/3 justify-end">
+                <input 
+                  type="text" 
+                  name="facebook" 
+                  value={formData.facebook} 
+                  onChange={handleChange} 
+                  onBlur={updateProfile} 
+                  disabled={!isEditing} 
+                  placeholder="Username or ID"
+                  className={`bg-transparent text-right text-sm outline-none w-full transition-all rounded px-2
+                    ${isEditing 
+                      ? "text-blue-600 placeholder-blue-300 bg-blue-50/50 dark:bg-blue-900/20 dark:text-blue-400" 
+                      : "text-blue-600 placeholder-gray-400 dark:text-blue-500 dark:placeholder-gray-600"
+                    }`}
+                />
                 
-                {/* 🆕 OPEN LINK BUTTON */}
-                {formData.facebook && (
+                {formData.facebook && !isEditing && (
                     <a 
                       href={buildUrl(formData.facebook, "facebook.com")} 
                       target="_blank" 
-                      className="bg-blue-900/40 p-1.5 rounded-md text-blue-400 hover:bg-blue-600 hover:text-white transition-all ml-1"
+                      className="p-1.5 rounded-md transition-all ml-1
+                        bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white
+                        dark:bg-blue-900/40 dark:text-blue-400 dark:hover:bg-blue-600 dark:hover:text-white"
                       title="Open Profile"
                     >
                       <FaExternalLinkAlt className="text-xs" />
@@ -313,20 +393,33 @@ export default function ProfilePage() {
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center gap-2">
                 <FaInstagram className="text-pink-600 text-lg" />
-                <span className="text-sm font-bold text-gray-400 hidden sm:block">Instagram</span>
-                <FaQuestionCircle className="text-gray-600 hover:text-white cursor-pointer text-xs" onClick={() => setShowHelp(true)} />
+                <span className="text-sm font-bold text-gray-600 dark:text-gray-400 hidden sm:block">Instagram</span>
+                <FaQuestionCircle className="text-gray-400 hover:text-gray-600 dark:text-gray-600 dark:hover:text-white cursor-pointer text-xs" onClick={() => setShowHelp(true)} />
             </div>
             
-            <div className="flex items-center gap-2 w-2/3 justify-end">
-                <input type="text" name="instagram" value={formData.instagram} onChange={handleChange} placeholder="Username"
-                  className="bg-transparent text-right text-sm text-pink-600 outline-none w-full placeholder-gray-600 focus:text-pink-400 transition-colors"/>
+            <div className="flex items-center w-2/3 justify-end">
+                <input 
+                  type="text" 
+                  name="instagram" 
+                  value={formData.instagram} 
+                  onChange={handleChange} 
+                  onBlur={updateProfile} 
+                  disabled={!isEditing} 
+                  placeholder="Username"
+                  className={`bg-transparent text-right text-sm outline-none w-full transition-all rounded px-2
+                    ${isEditing 
+                      ? "text-pink-600 placeholder-pink-300 bg-pink-50/50 dark:bg-pink-900/20 dark:text-pink-400" 
+                      : "text-pink-600 placeholder-gray-400 dark:text-pink-500 dark:placeholder-gray-600"
+                    }`}
+                />
                 
-                {/* 🆕 OPEN LINK BUTTON */}
-                {formData.instagram && (
+                {formData.instagram && !isEditing && (
                     <a 
                       href={buildUrl(formData.instagram, "instagram.com")} 
                       target="_blank" 
-                      className="bg-pink-900/40 p-1.5 rounded-md text-pink-400 hover:bg-pink-600 hover:text-white transition-all ml-1"
+                      className="p-1.5 rounded-md transition-all ml-1
+                        bg-pink-50 text-pink-600 hover:bg-pink-600 hover:text-white
+                        dark:bg-pink-900/40 dark:text-pink-400 dark:hover:bg-pink-600 dark:hover:text-white"
                       title="Open Profile"
                     >
                       <FaExternalLinkAlt className="text-xs" />
@@ -337,33 +430,42 @@ export default function ProfilePage() {
 
         </div>
 
-        {/* Actions */}
+        {/* Actions (Save button removed) */}
         <div className="w-full max-w-md mt-6 space-y-3">
-          {message && <div className={`text-center text-xs font-bold py-2 ${message.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>{message.text}</div>}
-
-          <button onClick={updateProfile} disabled={updating}
-            className="w-full flex items-center justify-between bg-[#2b2b2b] hover:bg-[#333] p-4 rounded-2xl transition-all border border-[#333] group">
-            <div className="flex items-center gap-3">
-                <div className="bg-blue-900/30 p-2 rounded-lg text-blue-400"><FaSave /></div>
-                <span className="font-bold text-sm">Save Changes</span>
-            </div>
-            <FaChevronRight className="text-gray-500 group-hover:text-white transition-colors text-xs" />
-          </button>
-
+          
           <button onClick={() => router.push("/pages/user/my-tickets")}
-            className="w-full flex items-center justify-between bg-[#2b2b2b] hover:bg-[#333] p-4 rounded-2xl transition-all border border-[#333] group">
+            className="w-full flex items-center justify-between p-4 rounded-2xl transition-all border group shadow-sm
+              bg-white border-gray-200 hover:bg-gray-50
+              dark:bg-[#2b2b2b] dark:border-[#333] dark:hover:bg-[#333]"
+          >
             <div className="flex items-center gap-3">
-                <div className="bg-green-900/30 p-2 rounded-lg text-green-400"><FaTicketAlt /></div>
-                <span className="font-bold text-sm">My Tickets</span>
+                <div className="p-2 rounded-lg
+                  bg-green-50 text-green-600
+                  dark:bg-green-900/30 dark:text-green-400"
+                >
+                  <FaTicketAlt />
+                </div>
+                <span className="font-bold text-sm text-gray-700 dark:text-white">My Tickets</span>
             </div>
-            <FaChevronRight className="text-gray-500 group-hover:text-white transition-colors text-xs" />
+            <FaChevronRight className="text-xs transition-colors
+              text-gray-400 group-hover:text-gray-600
+              dark:text-gray-500 dark:group-hover:text-white" 
+            />
           </button>
 
           <button onClick={() => supabase.auth.signOut().then(() => router.push("/auth"))}
-            className="w-full flex items-center justify-between bg-[#2b2b2b] hover:bg-red-950/20 p-4 rounded-2xl transition-all border border-[#333] group mt-4">
+            className="w-full flex items-center justify-between p-4 rounded-2xl transition-all border group mt-4 shadow-sm
+              bg-white border-gray-200 hover:bg-red-50
+              dark:bg-[#2b2b2b] dark:border-[#333] dark:hover:bg-red-950/20"
+          >
             <div className="flex items-center gap-3">
-                <div className="bg-red-900/20 p-2 rounded-lg text-red-400"><FaSignOutAlt /></div>
-                <span className="font-bold text-sm text-red-400">Log Out</span>
+                <div className="p-2 rounded-lg
+                  bg-red-50 text-red-500
+                  dark:bg-red-900/20 dark:text-red-400"
+                >
+                  <FaSignOutAlt />
+                </div>
+                <span className="font-bold text-sm text-red-500 dark:text-red-400">Log Out</span>
             </div>
           </button>
         </div>
