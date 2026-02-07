@@ -1,69 +1,276 @@
 "use client";
-import { useEffect, useState, use } from "react"; 
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { useRouter, useSearchParams } from "next/navigation"; 
-import Link from "next/link";
+import { useRouter, useParams } from "next/navigation";
 import { 
-  FaUser, FaArrowLeft, FaFacebook, FaInstagram, FaPhone, 
-  FaMusic, FaClock, FaEdit, FaTimes, FaSave, FaGlobe, FaUserShield, 
-  FaYoutube, FaAlignLeft, FaCheckCircle, FaPlay, FaHourglassHalf,
-  FaCheck, FaCheckDouble, FaLongArrowAltRight
+  FaUser, 
+  FaPhone, 
+  FaFacebook, 
+  FaInstagram, 
+  FaArrowLeft, 
+  FaTicketAlt,
+  FaExternalLinkAlt,
+  FaPen,
+  FaTimes,
+  FaSave,
+  FaShieldAlt,
+  FaIdBadge
 } from "react-icons/fa";
-import { getYouTubeThumbnail } from "@/app/lib/utils";
-import { CarouselThumbnail, BackgroundCarousel } from "@/app/components/TicketCarousels";
-import { useToast } from "@/app/context/ToastContext"; 
+import { useToast } from "@/app/context/ToastContext";
 
-type Profile = {
+// ♻️ REUSABLE COMPONENTS
+import TicketCard from "@/app/components/TicketCard";
+import { Ticket } from "@/app/types";
+
+// --- TYPES ---
+interface UserProfile {
   id: string;
   full_name: string;
-  avatar_url: string;
+  email?: string;
   phone: string;
+  avatar_url: string;
   facebook_link: string;
   instagram_link: string;
   role: string;
+}
+
+// --- HELPER FUNCTIONS FOR URL PARSING ---
+const extractHandle = (url: string, type: 'facebook' | 'instagram') => {
+  if (!url) return "";
+  
+  if (type === 'facebook') {
+    // Handle: profile.php?id=123456
+    if (url.includes("profile.php?id=")) {
+      return url.split("id=")[1];
+    }
+    // Handle: facebook.com/username
+    return url.replace(/^(?:https?:\/\/)?(?:www\.)?facebook\.com\//i, "").replace(/\/$/, "");
+  }
+  
+  if (type === 'instagram') {
+    return url.replace(/^(?:https?:\/\/)?(?:www\.)?instagram\.com\//i, "").replace(/\/$/, "");
+  }
+  
+  return url;
 };
 
-type Ticket = {
-  id: number;
-  title: string;
-  youtube_link: string | string[];
-  status: "new" | "queue" | "in progress" | "done";
-  created_at: string;
-  base_bpm: string;
-  target_bpm: string;
-  deadline: string;
-  music_category: string;
-  description?: string;
+const buildUrl = (handle: string, type: 'facebook' | 'instagram') => {
+  const cleanHandle = handle.trim();
+  if (!cleanHandle) return "";
+  if (cleanHandle.startsWith("http")) return cleanHandle; // Already a URL
+
+  if (type === 'facebook') {
+    // If it's purely numbers, assume it's a Profile ID
+    if (/^\d+$/.test(cleanHandle)) {
+      return `https://www.facebook.com/profile.php?id=${cleanHandle}`;
+    }
+    // Otherwise assume it's a username
+    return `https://www.facebook.com/${cleanHandle}`;
+  }
+
+  if (type === 'instagram') {
+    return `https://www.instagram.com/${cleanHandle}`;
+  }
+
+  return cleanHandle;
 };
 
-export default function AdminUserPage({ params }: { params: Promise<{ id: string }> }) {
-  const router = useRouter();
-  const searchParams = useSearchParams(); 
-  const { id } = use(params);
-  const { showToast } = useToast(); 
-
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fromSource = searchParams.get("from");
-  const backLink = fromSource === "list" ? "/pages/admin/user" : "/pages/admin";
-  const backText = fromSource === "list" ? "Back to User List" : "Back to Dashboard";
-
-  const [showModal, setShowModal] = useState(false);
+// --- EDIT MODAL COMPONENT ---
+function EditUserModal({ 
+  isOpen, 
+  onClose, 
+  user, 
+  onUpdate 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  user: UserProfile; 
+  onUpdate: (updatedData: Partial<UserProfile>) => Promise<void>;
+}) {
+  // We use a local form state that might differ slightly from the raw DB data
+  // specifically for the social fields (showing handles instead of full URLs)
+  const [formData, setFormData] = useState({ ...user });
   const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState({
-    phone: "",
-    facebook_user: "",
-    instagram_user: "",
-    role: "user"
-  });
+
+  // Initialize form data when user prop loads
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        ...user,
+        facebook_link: extractHandle(user.facebook_link, 'facebook'),
+        instagram_link: extractHandle(user.instagram_link, 'instagram')
+      });
+    }
+  }, [user]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+
+    // Reconstruct full URLs before saving
+    const payload = {
+      ...formData,
+      facebook_link: buildUrl(formData.facebook_link, 'facebook'),
+      instagram_link: buildUrl(formData.instagram_link, 'instagram'),
+    };
+
+    await onUpdate(payload);
+    setSaving(false);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-all">
+      <div className="w-full max-w-lg rounded-2xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]
+        bg-white text-gray-900
+        dark:bg-[#1e1e1e] dark:text-white"
+      >
+        {/* Modal Header */}
+        <div className="px-6 py-4 border-b flex justify-between items-center border-gray-100 dark:border-[#333]">
+          <h3 className="text-lg font-bold flex items-center gap-2">
+            <FaPen className="text-blue-500" /> Edit User Profile
+          </h3>
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-[#333] transition-colors">
+            <FaTimes />
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <div className="p-6 overflow-y-auto">
+          <form id="edit-user-form" onSubmit={handleSubmit} className="space-y-4">
+            
+            {/* Full Name */}
+            <div>
+              <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Full Name</label>
+              <div className="relative">
+                <FaUser className="absolute left-3 top-3.5 text-gray-400" />
+                <input 
+                  type="text" 
+                  value={formData.full_name || ""} 
+                  onChange={(e) => setFormData({...formData, full_name: e.target.value})}
+                  className="w-full pl-10 p-3 rounded-xl border outline-none focus:border-blue-500 transition-colors
+                    bg-gray-50 border-gray-200 text-gray-900
+                    dark:bg-[#252525] dark:border-[#333] dark:text-white"
+                />
+              </div>
+            </div>
+
+            {/* Role Selector */}
+            <div>
+              <label className="block text-xs font-bold uppercase text-gray-500 mb-1">User Role</label>
+              <div className="relative">
+                <FaShieldAlt className="absolute left-3 top-3.5 text-gray-400" />
+                <select 
+                  value={formData.role || "user"} 
+                  onChange={(e) => setFormData({...formData, role: e.target.value})}
+                  className="w-full pl-10 p-3 rounded-xl border outline-none focus:border-blue-500 transition-colors appearance-none
+                    bg-gray-50 border-gray-200 text-gray-900
+                    dark:bg-[#252525] dark:border-[#333] dark:text-white"
+                >
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Phone */}
+            <div>
+              <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Phone Number</label>
+              <div className="relative">
+                <FaPhone className="absolute left-3 top-3.5 text-gray-400" />
+                <input 
+                  type="text" 
+                  value={formData.phone || ""} 
+                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                  className="w-full pl-10 p-3 rounded-xl border outline-none focus:border-blue-500 transition-colors
+                    bg-gray-50 border-gray-200 text-gray-900
+                    dark:bg-[#252525] dark:border-[#333] dark:text-white"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Facebook */}
+              <div>
+                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Facebook</label>
+                <div className="relative">
+                  <FaFacebook className="absolute left-3 top-3.5 text-blue-600" />
+                  <input 
+                    type="text" 
+                    value={formData.facebook_link || ""} 
+                    onChange={(e) => setFormData({...formData, facebook_link: e.target.value})}
+                    placeholder="Username or ID"
+                    className="w-full pl-10 p-3 rounded-xl border outline-none focus:border-blue-500 transition-colors
+                      bg-gray-50 border-gray-200 text-gray-900
+                      dark:bg-[#252525] dark:border-[#333] dark:text-white"
+                  />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1 ml-1">Type ID (numbers) or Username</p>
+              </div>
+
+              {/* Instagram */}
+              <div>
+                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Instagram</label>
+                <div className="relative">
+                  <FaInstagram className="absolute left-3 top-3.5 text-pink-500" />
+                  <input 
+                    type="text" 
+                    value={formData.instagram_link || ""} 
+                    onChange={(e) => setFormData({...formData, instagram_link: e.target.value})}
+                    placeholder="Username"
+                    className="w-full pl-10 p-3 rounded-xl border outline-none focus:border-blue-500 transition-colors
+                      bg-gray-50 border-gray-200 text-gray-900
+                      dark:bg-[#252525] dark:border-[#333] dark:text-white"
+                  />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1 ml-1">Username only (no @)</p>
+              </div>
+            </div>
+
+          </form>
+        </div>
+
+        {/* Modal Footer */}
+        <div className="p-4 border-t flex justify-end gap-3 border-gray-100 dark:border-[#333] bg-gray-50 dark:bg-[#252525]">
+          <button 
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg font-bold transition-colors text-gray-600 hover:bg-gray-200 dark:text-gray-400 dark:hover:bg-[#333]"
+          >
+            Cancel
+          </button>
+          <button 
+            type="submit" 
+            form="edit-user-form"
+            disabled={saving}
+            className="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold flex items-center gap-2 shadow-lg transition-all disabled:opacity-50"
+          >
+            {saving ? "Saving..." : <><FaSave /> Save Changes</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- MAIN PAGE ---
+export default function AdminUserDetailPage() {
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  
+  const { showToast } = useToast();
+  const router = useRouter();
+  const params = useParams();
+  const userId = params.id as string;
 
   useEffect(() => {
-    if (id) fetchUserData(id);
-  }, [id]);
+    fetchData();
+  }, []);
 
-  async function fetchUserData(userId: string) {
+  async function fetchData() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push("/auth"); return; }
     
@@ -74,10 +281,10 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
       .single();
 
     if (profileError) {
-      console.error("Error fetching profile:", profileError);
-      return; 
+      console.error("Error fetching profile", profileError);
+    } else {
+      setProfile(profileData);
     }
-    setProfile(profileData);
 
     const { data: ticketData, error: ticketError } = await supabase
       .from("song_requests")
@@ -85,414 +292,202 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
 
-    if (ticketError) console.error("Error fetching tickets:", ticketError);
-    else setTickets(ticketData as Ticket[]);
-
+    if (ticketError) {
+      console.error("Error fetching tickets", ticketError);
+    } else {
+      setTickets(ticketData as Ticket[]);
+    }
+    
     setLoading(false);
   }
 
-  const openEditModal = () => {
-    if (!profile) return;
-    
-    let cleanFB = profile.facebook_link || "";
-    cleanFB = cleanFB.replace(/(https?:\/\/)?(www\.)?facebook\.com\//, "").replace("profile.php?id=", "");
-    
-    const cleanInsta = profile.instagram_link 
-      ? profile.instagram_link.replace(/(https?:\/\/)?(www\.)?instagram\.com\//, "").replace("/", "")
-      : "";
-
-    setFormData({
-      phone: profile.phone || "",
-      facebook_user: cleanFB,
-      instagram_user: cleanInsta,
-      role: profile.role || "user"
-    });
-    setShowModal(true);
-  };
-
-  const handleSave = async () => {
-    if (!profile) return;
-    setSaving(true);
-
-    let finalFB = "";
-    if (formData.facebook_user) {
-      if (formData.facebook_user.includes("facebook.com")) {
-        finalFB = formData.facebook_user;
-      } else {
-        const isNumericId = /^\d+$/.test(formData.facebook_user);
-        finalFB = isNumericId 
-          ? `https://www.facebook.com/profile.php?id=${formData.facebook_user}` 
-          : `https://www.facebook.com/${formData.facebook_user}`;
-      }
-    }
-
-    const finalInsta = formData.instagram_user 
-      ? (formData.instagram_user.includes("instagram.com") ? formData.instagram_user : `https://www.instagram.com/${formData.instagram_user}`)
-      : "";
-
+  async function handleUpdateUser(updatedData: Partial<UserProfile>) {
     const { error } = await supabase
       .from("profiles")
-      .update({
-        phone: formData.phone,
-        facebook_link: finalFB,
-        instagram_link: finalInsta,
-        role: formData.role
-      })
-      .eq("id", profile.id);
+      .update(updatedData)
+      .eq("id", userId);
 
     if (error) {
-      console.error("Update failed:", error);
-      showToast("Error saving changes: " + error.message, "error"); 
+      showToast("Failed to update profile", "error");
     } else {
-      setProfile({ 
-        ...profile, 
-        phone: formData.phone, 
-        facebook_link: finalFB, 
-        instagram_link: finalInsta, 
-        role: formData.role 
-      });
-      showToast("Profile updated successfully!", "success"); 
-      setShowModal(false);
+      showToast("Profile updated successfully", "success");
+      setProfile({ ...profile!, ...updatedData });
     }
-    setSaving(false);
+  }
+
+  // Display helper: always shows full link in the main card, 
+  // but we use the helper to ensure it's a clickable URL.
+  const getSocialUrl = (input: string, domain: string) => {
+    return buildUrl(input, domain as 'facebook' | 'instagram');
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'accepted': return <span className="bg-blue-900/50 text-blue-200 border border-blue-500/30 px-2 py-0.5 rounded text-[10px] font-bold uppercase flex items-center gap-1"><FaCheck size={8} /> Queue</span>;
-      case 'in progress': return <span className="bg-yellow-900/50 text-yellow-200 border border-yellow-500/30 px-2 py-0.5 rounded text-[10px] font-bold uppercase flex items-center gap-1"><FaPlay size={8} /> Mixing</span>;
-      case 'completed': return <span className="bg-green-900/50 text-green-200 border border-green-500/30 px-2 py-0.5 rounded text-[10px] font-bold uppercase flex items-center gap-1"><FaCheckDouble size={8} /> Done</span>;
-      default: return <span className="bg-gray-800 text-gray-400 border border-gray-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase flex items-center gap-1"><FaClock size={8} /> New</span>;
-    }
-  };
-
-  if (loading) return <div className="p-10 text-center text-white">Loading Profile...</div>;
-  if (!profile) return <div className="p-10 text-center text-white">User not found.</div>;
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center text-gray-500 dark:text-gray-400">
+      Loading User Profile...
+    </div>
+  );
 
   return (
-    <div className="min-h-screen p-4 sm:p-8 max-w-7xl mx-auto relative">
+    <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto font-sans
+      bg-gray-50 text-gray-900
+      dark:bg-[#121212] dark:text-white"
+    >
       
-      {/* 🔙 BACK BUTTON */}
-      <Link href={backLink} className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors">
-        <FaArrowLeft size={14} /> {backText}
-      </Link>
+      {/* --- HEADER --- */}
+      <button 
+        onClick={() => router.back()} 
+        className="flex items-center gap-2 mb-6 font-bold transition-colors text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"
+      >
+        <FaArrowLeft /> Back to Users
+      </button>
 
-      {/* 👤 PERSONAL DATA CARD */}
-      <div className="bg-[#1e1e1e] border border-[#333] rounded-2xl p-6 sm:p-8 mb-8 shadow-xl flex flex-col md:flex-row items-start gap-8 relative group/card">
-        
-        {/* EDIT BUTTON */}
-        <button 
-            onClick={openEditModal}
-            className="absolute top-4 right-4 sm:top-6 sm:right-6 text-gray-500 hover:text-blue-400 transition-colors p-2 bg-[#252525] rounded-lg border border-[#333] hover:border-blue-500/50 opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100"
-            title="Edit Profile"
-        >
-            <FaEdit size={16} />
-        </button>
-
-        {/* Avatar */}
-        <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden bg-[#252525] border-4 border-[#333] shrink-0 shadow-lg mt-2 mx-auto md:mx-0">
-          {profile.avatar_url ? (
-            <img src={profile.avatar_url} alt={profile.full_name} className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-600 bg-gradient-to-br from-gray-800 to-black">
-              <FaUser size={40} />
-            </div>
-          )}
+      {/* --- FANCY PROFILE CARD --- */}
+      <div className="w-full rounded-3xl shadow-xl overflow-hidden mb-12 relative group
+        bg-white border border-gray-200
+        dark:bg-[#1e1e1e] dark:border-[#333]"
+      >
+        {/* Gradient Banner */}
+        <div className="h-32 sm:h-40 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 relative">
+           <button 
+             onClick={() => setIsEditModalOpen(true)}
+             className="absolute top-4 right-4 bg-black/30 hover:bg-black/50 backdrop-blur-md text-white p-3 rounded-xl transition-all shadow-lg border border-white/10 group-hover:scale-105"
+             title="Edit User Info"
+           >
+             <FaPen size={14} />
+           </button>
         </div>
 
-        {/* User Details */}
-        <div className="flex-1 w-full text-center md:text-left">
-          {/* Header & Stats */}
-          <div className="flex flex-col md:flex-row justify-between items-center md:items-start gap-4">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">{profile.full_name || "Unnamed User"}</h1>
-              
-              <span className={`px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider border
-                ${profile.role === 'admin' 
-                  ? 'bg-red-900/30 text-red-400 border-red-800'
-                  : 'bg-blue-900/30 text-blue-400 border-blue-800'
-                }
-              `}>
-                  {profile.role}
-              </span>
-            </div>
-            
-            <div className="flex gap-4 text-center bg-[#252525] p-2 rounded-lg border border-[#333]">
-              <div className="px-2">
-                <p className="text-xl font-bold text-white">{tickets.length}</p>
-                <p className="text-[10px] text-gray-500 uppercase">Requests</p>
-              </div>
-              <div className="w-px bg-[#444]"></div>
-              <div className="px-2">
-                <p className="text-xl font-bold text-green-500">{tickets.filter(t => t.status === 'done').length}</p>
-                <p className="text-[10px] text-gray-500 uppercase">Completed</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Contact Info Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 text-left">
-            {/* Phone */}
-            <div className="flex items-center gap-3 bg-[#252525] p-3 rounded-lg border border-[#333]">
-              <div className="bg-[#333] p-2 rounded text-gray-400"><FaPhone size={14} /></div>
-              <div>
-                <p className="text-[10px] text-gray-500 uppercase font-bold">Phone</p>
-                <p className="text-sm text-gray-200">{profile.phone || "Not provided"}</p>
-              </div>
-            </div>
-
-            {/* Social Media */}
-            {(profile.facebook_link || profile.instagram_link) ? (
-              <div className="flex items-center gap-3 bg-[#252525] p-3 rounded-lg border border-[#333] overflow-hidden">
-                <div className="bg-[#333] p-2 rounded text-gray-400 shrink-0"><FaGlobe size={14} /></div>
-                
-                <div className="flex w-full gap-2">
-                  {profile.facebook_link && (
-                    <a 
-                      href={profile.facebook_link} 
-                      target="_blank" 
-                      className="flex-1 flex items-center justify-center gap-2 bg-[#1877F2] hover:bg-[#166fe5] text-white px-2 py-1.5 rounded text-xs font-bold transition-colors truncate min-w-0"
-                    >
-                      <FaFacebook className="shrink-0" /> <span className="truncate">Facebook</span>
-                    </a>
-                  )}
-                  {profile.instagram_link && (
-                    <a 
-                      href={profile.instagram_link} 
-                      target="_blank" 
-                      className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-tr from-[#FFDC80] via-[#FD1D1D] to-[#C13584] hover:opacity-90 text-white px-2 py-1.5 rounded text-xs font-bold transition-opacity truncate min-w-0"
-                    >
-                      <FaInstagram className="shrink-0" /> <span className="truncate">Instagram</span>
-                    </a>
-                  )}
-                </div>
-              </div>
-            ) : (
-                <div className="hidden md:block"></div> 
-            )}
-          </div>
-        </div>
-      </div>
-
-      <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-        <FaMusic className="text-blue-500" /> Request History
-      </h2>
-
-      {/* REQUEST HISTORY GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {tickets.map((ticket) => {
-          // 🛠️ SAFE THUMBNAIL LOGIC
-          const links = Array.isArray(ticket.youtube_link) ? ticket.youtube_link : (ticket.youtube_link ? [ticket.youtube_link] : []);
-          const rawThumbnails = getYouTubeThumbnail(links);
-          const thumbnails = Array.isArray(rawThumbnails) ? rawThumbnails : (rawThumbnails ? [rawThumbnails] : []);
+        <div className="px-6 sm:px-10 pb-8 relative">
           
-          const hasMultipleImages = thumbnails.length > 1;
-          const mainCover = thumbnails[0] || "";
+          {/* Overlapping Avatar */}
+          <div className="flex flex-col sm:flex-row gap-6 items-start -mt-12 sm:-mt-16 mb-4">
+            <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full p-1 bg-white dark:bg-[#1e1e1e] shadow-2xl relative shrink-0">
+               <div className="w-full h-full rounded-full overflow-hidden border-2 border-gray-100 dark:border-[#333] relative bg-gray-100 dark:bg-[#2b2b2b]">
+                 {profile?.avatar_url ? (
+                   <img src={profile.avatar_url} alt="User" className="w-full h-full object-cover" />
+                 ) : (
+                   <div className="w-full h-full flex items-center justify-center text-4xl text-gray-400">
+                     <FaUser />
+                   </div>
+                 )}
+               </div>
+               
+               {/* Role Badge */}
+               <div className={`absolute bottom-0 right-0 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border shadow-md
+                 ${profile?.role === 'admin' 
+                   ? "bg-red-500 text-white border-red-400" 
+                   : "bg-blue-500 text-white border-blue-400"}`}
+               >
+                 {profile?.role || "USER"}
+               </div>
+            </div>
 
-          return (
-              <div 
-                key={ticket.id} 
-                className="relative overflow-hidden rounded-xl border border-[#333] shadow-lg group hover:border-gray-500 transition-all duration-300 flex flex-col h-full"
-              >
-                {/* Background */}
-                {thumbnails.length > 0 ? (
-                  hasMultipleImages ? (
-                    <BackgroundCarousel images={thumbnails} blur="blur-none" />
-                  ) : (
-                    <>
-                      <div 
-                        className="absolute inset-0 z-0 bg-cover bg-center filter blur-none scale-110 opacity-30 transition-transform duration-500 group-hover:scale-125"
-                        style={{ backgroundImage: `url('${mainCover}')` }}
-                      />
-                      <div className="absolute inset-0 z-0 bg-black/80" />
-                    </>
-                  )
-                ) : (
-                  <div className="absolute inset-0 z-0 bg-[#1e1e1e]" />
-                )}
-
-                {/* Content */}
-                <div className="relative z-10 p-5 flex flex-col h-full">
-                  
-                  {/* Header */}
-                  <div className="flex justify-between items-start mb-4">
-                    <Link href={`/pages/request/${ticket.id}`} className="hover:underline decoration-blue-500 min-w-0 pr-2">
-                      <h2 className="text-lg font-bold text-white leading-tight drop-shadow-md truncate">
-                        {ticket.title}
-                      </h2>
-                    </Link>
-                    
-                    <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider border flex items-center gap-1.5 shadow-sm shrink-0
-                      ${ticket.status === 'done' ? 'bg-green-600 text-white border-green-400' : 
-                        ticket.status === 'in progress' ? 'bg-yellow-600 text-white border-yellow-400' :
-                        ticket.status === 'queue' ? 'bg-blue-600 text-white border-blue-400' :
-                        'bg-gray-700 text-gray-300 border-gray-500'}
-                    `}>
-                      {ticket.status === 'done' && <FaCheckCircle />}
-                      {ticket.status === 'in progress' && <FaPlay size={8} />}
-                      {ticket.status === 'queue' && <FaHourglassHalf size={8} />}
-                      {ticket.status === 'new' && "NEW"}
-                      {ticket.status !== 'new' && ticket.status}
-                    </span>
-                  </div>
-
-                  {/* Body */}
-                  <div className="flex gap-4 mb-4 items-start">
-                    <div className="shrink-0 w-28 aspect-video rounded-lg overflow-hidden border border-white/10 shadow-lg bg-black relative group/thumb">
-                      {thumbnails.length > 0 ? (
-                        hasMultipleImages ? (
-                          // ✅ CHANGED: showIndicators={true} shows the progression dots
-                          <CarouselThumbnail images={thumbnails} showIndicators={true} />
-                        ) : (
-                          <div className="w-full h-full relative">
-                             <img 
-                               src={thumbnails[0]} 
-                               className="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform duration-500" 
-                               alt="thumb"
-                             />
-                             <div className="absolute inset-0 bg-black/10 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity">
-                                <FaYoutube className="text-red-500 drop-shadow-lg scale-125" />
-                             </div>
-                          </div>
-                        )
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-500">
-                          <FaMusic size={24} />
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex-1 space-y-2 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2 py-0.5 rounded text-[10px] border tracking-wide font-bold shadow-sm truncate
-                            ${(ticket.music_category || "").toLowerCase() === 'choreo' 
-                               ? 'bg-purple-900/40 text-purple-200 border-purple-700' 
-                               : 'bg-blue-900/40 text-blue-200 border-blue-700'}
-                          `}>
-                            {ticket.music_category || "Dance Class"}
-                          </span>
-                        </div>
-                        
-                        <div className="text-xs text-gray-300 truncate">
-                          <span className="text-gray-500 font-bold uppercase tracking-wider">BPM:</span> 
-                          <span className="ml-1 font-mono text-white">{ticket.base_bpm || "?"} ➝ {ticket.target_bpm || "?"}</span>
-                        </div>
-
-                        {ticket.deadline && (
-                          <div className="text-[10px] text-yellow-500/90 flex items-center gap-1 font-medium bg-yellow-500/10 px-1.5 py-0.5 rounded w-fit border border-yellow-500/20">
-                            <FaClock size={9} /> 
-                            {new Date(ticket.deadline).toLocaleDateString()}
-                          </div>
-                        )}
-                    </div>
-                  </div>
-
-                  {/* ❌ DESCRIPTION REMOVED FROM HERE */}
-
-                </div>
+            {/* Basic Info */}
+            <div className="flex-1 mt-2 sm:mt-16 space-y-1">
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+                {profile?.full_name || "Unknown User"}
+              </h1>
+              <div className="flex items-center gap-2 text-xs text-gray-400 font-mono bg-gray-100 dark:bg-[#252525] w-fit px-2 py-1 rounded border border-gray-200 dark:border-[#333]">
+                <FaIdBadge /> {profile?.id}
               </div>
-          );
-        })}
+            </div>
+          </div>
+
+          {/* Detailed Info Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+            
+            {/* Phone */}
+            <div className="p-4 rounded-2xl border flex items-center gap-4 transition-colors
+              bg-gray-50 border-gray-100
+              dark:bg-[#252525] dark:border-[#333]"
+            >
+              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-200 dark:bg-[#333] text-gray-500 dark:text-gray-400">
+                <FaPhone />
+              </div>
+              <div>
+                <p className="text-xs uppercase font-bold text-gray-400">Phone</p>
+                <p className="font-semibold text-gray-800 dark:text-gray-200">{profile?.phone || "N/A"}</p>
+              </div>
+            </div>
+
+            {/* Facebook */}
+            <a href={getSocialUrl(profile?.facebook_link || "", "facebook.com")} target="_blank"
+              className={`p-4 rounded-2xl border flex items-center gap-4 transition-all group
+                ${profile?.facebook_link 
+                  ? "bg-blue-50 border-blue-100 hover:border-blue-300 dark:bg-blue-900/10 dark:border-blue-900/30 dark:hover:border-blue-600/50 cursor-pointer" 
+                  : "bg-gray-50 border-gray-100 opacity-60 cursor-not-allowed dark:bg-[#252525] dark:border-[#333]"}`}
+            >
+              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                <FaFacebook />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs uppercase font-bold text-gray-400">Facebook</p>
+                <p className="font-semibold text-blue-700 dark:text-blue-300 truncate">
+                  {profile?.facebook_link ? extractHandle(profile.facebook_link, 'facebook') : "Not Linked"}
+                </p>
+              </div>
+              {profile?.facebook_link && <FaExternalLinkAlt className="text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity text-xs" />}
+            </a>
+
+            {/* Instagram */}
+            <a href={getSocialUrl(profile?.instagram_link || "", "instagram.com")} target="_blank"
+              className={`p-4 rounded-2xl border flex items-center gap-4 transition-all group
+                ${profile?.instagram_link 
+                  ? "bg-pink-50 border-pink-100 hover:border-pink-300 dark:bg-pink-900/10 dark:border-pink-900/30 dark:hover:border-pink-600/50 cursor-pointer" 
+                  : "bg-gray-50 border-gray-100 opacity-60 cursor-not-allowed dark:bg-[#252525] dark:border-[#333]"}`}
+            >
+              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400">
+                <FaInstagram />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs uppercase font-bold text-gray-400">Instagram</p>
+                <p className="font-semibold text-pink-700 dark:text-pink-300 truncate">
+                  {profile?.instagram_link ? extractHandle(profile.instagram_link, 'instagram') : "Not Linked"}
+                </p>
+              </div>
+              {profile?.instagram_link && <FaExternalLinkAlt className="text-pink-400 opacity-0 group-hover:opacity-100 transition-opacity text-xs" />}
+            </a>
+
+          </div>
+        </div>
       </div>
-      
-      {tickets.length === 0 && (
-         <div className="text-center py-12 text-gray-500 bg-[#1e1e1e] rounded-xl border border-[#333] border-dashed">
-           This user hasn't requested any songs yet.
-         </div>
+
+      {/* --- TICKETS SECTION --- */}
+      <div className="flex items-center gap-3 mb-6">
+        <div className="bg-blue-600 text-white p-2 rounded-lg shadow-md">
+          <FaTicketAlt />
+        </div>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          Request History 
+        </h2>
+        <span className="ml-auto text-xs font-bold px-3 py-1 rounded-full bg-gray-200 text-gray-600 dark:bg-[#333] dark:text-gray-400 border border-gray-300 dark:border-[#444]">
+          {tickets.length} Requests
+        </span>
+      </div>
+
+      {tickets.length === 0 ? (
+        <div className="text-center py-20 rounded-3xl border-2 border-dashed
+          bg-white border-gray-200
+          dark:bg-[#1e1e1e] dark:border-[#333]"
+        >
+          <p className="text-gray-500">This user hasn't made any requests yet.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {tickets.map((ticket) => (
+            <TicketCard key={ticket.id} ticket={ticket} />
+          ))}
+        </div>
       )}
 
-      {/* EDIT MODAL */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#1e1e1e] border border-[#333] w-full max-w-md rounded-2xl p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200">
-            <button 
-              onClick={() => setShowModal(false)}
-              className="absolute top-4 right-4 text-gray-500 hover:text-white"
-            >
-              <FaTimes size={18} />
-            </button>
-
-            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-              <FaEdit className="text-blue-500" /> Edit Profile
-            </h2>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">User Role</label>
-                <div className="relative">
-                    <FaUserShield className={`absolute left-3 top-3 ${formData.role === 'admin' ? 'text-red-500' : 'text-blue-500'}`} />
-                    <select
-                      value={formData.role}
-                      onChange={(e) => setFormData({...formData, role: e.target.value})}
-                      className="w-full bg-[#252525] border border-[#444] text-white py-2.5 pl-10 pr-4 rounded-lg focus:outline-none focus:border-blue-500 transition-colors appearance-none cursor-pointer hover:border-gray-500"
-                    >
-                      <option value="user">User</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Phone Number</label>
-                <div className="relative">
-                    <FaPhone className="absolute left-3 top-3 text-gray-500" />
-                    <input 
-                      type="text" 
-                      value={formData.phone}
-                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                      placeholder="+36 30 123 4567"
-                      className="w-full bg-[#252525] border border-[#444] text-white py-2.5 pl-10 pr-4 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
-                    />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Facebook ID / Username</label>
-                <div className="relative">
-                    <FaFacebook className="absolute left-3 top-3 text-[#1877F2]" />
-                    <input 
-                      type="text" 
-                      value={formData.facebook_user}
-                      onChange={(e) => setFormData({...formData, facebook_user: e.target.value})}
-                      placeholder="e.g. 100008730220164"
-                      className="w-full bg-[#252525] border border-[#444] text-white py-2.5 pl-10 pr-4 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
-                    />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Instagram Handle</label>
-                <div className="relative">
-                    <FaInstagram className="absolute left-3 top-3 text-[#C13584]" />
-                    <input 
-                      type="text" 
-                      value={formData.instagram_user}
-                      onChange={(e) => setFormData({...formData, instagram_user: e.target.value})}
-                      placeholder="e.g. david_vigh_official"
-                      className="w-full bg-[#252525] border border-[#444] text-white py-2.5 pl-10 pr-4 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
-                    />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-8">
-               <button 
-                 onClick={() => setShowModal(false)}
-                 className="flex-1 py-3 rounded-xl bg-[#2a2a2a] hover:bg-[#333] text-gray-300 font-bold transition-colors"
-               >
-                 Cancel
-               </button>
-               <button 
-                 onClick={handleSave}
-                 disabled={saving}
-                 className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-900/20 transition-all flex items-center justify-center gap-2"
-               >
-                 {saving ? "Saving..." : <><FaSave /> Save Changes</>}
-               </button>
-            </div>
-
-          </div>
-        </div>
+      {/* --- EDIT MODAL --- */}
+      {profile && (
+        <EditUserModal 
+          isOpen={isEditModalOpen} 
+          onClose={() => setIsEditModalOpen(false)} 
+          user={profile} 
+          onUpdate={handleUpdateUser} 
+        />
       )}
 
     </div>
