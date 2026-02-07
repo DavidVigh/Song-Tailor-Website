@@ -12,7 +12,9 @@ import {
   FaCheckCircle,
   FaPlay,
   FaUsers,
-  FaPlus
+  FaPlus,
+  FaLayerGroup,
+  FaRegCircle
 } from "react-icons/fa";
 import Link from "next/link";
 import { useToast } from "@/app/context/ToastContext";
@@ -23,7 +25,7 @@ import ConfirmationModal from "@/app/components/ConfirmationModal";
 import { Ticket } from "@/app/types";
 
 const columns = [
-  { id: "new", title: "NEW", border: "border-gray-600" },
+  { id: "new", title: "NEW", border: "border-gray-500" },
   { id: "accepted", title: "QUEUE", border: "border-blue-500" },
   { id: "in progress", title: "IN PROGRESS", border: "border-yellow-500" },
   { id: "done", title: "DONE", border: "border-green-500" },
@@ -172,15 +174,49 @@ export default function AdminPage() {
       .eq("id", ticket.id);
   }
 
+  /**
+   * Helper function to get theme-aware colors for each column.
+   */
+  const getHeaderColors = (colId: string) => {
+    switch (colId) {
+      case "accepted": // QUEUE -> Blue
+        return {
+          text: "text-blue-600 dark:text-blue-400",
+          icon: "text-blue-500 dark:text-blue-400",
+          border: "border-blue-200 dark:border-blue-800/50", // Colored border matching text
+        };
+      case "in progress": // IN PROGRESS -> Yellow
+        return {
+          text: "text-yellow-600 dark:text-yellow-400",
+          icon: "text-yellow-500 dark:text-yellow-400",
+          border: "border-yellow-200 dark:border-yellow-800/50", // Colored border matching text
+        };
+      case "done": // DONE -> Green
+        return {
+          text: "text-green-600 dark:text-green-400",
+          icon: "text-green-500 dark:text-green-400",
+          border: "border-green-200 dark:border-green-800/50", // Colored border matching text
+        };
+      default: // NEW -> Gray
+        return {
+          text: "text-gray-600 dark:text-gray-400",
+          icon: "text-gray-400 dark:text-gray-500",
+          border: "border-gray-200 dark:border-gray-700", // Colored border matching text
+        };
+    }
+  };
+
   if (loading)
-    return <div className="p-10 text-center text-white">Loading Admin Panel...</div>;
+    return <div className="p-10 text-center text-gray-500 dark:text-white">Loading Admin Panel...</div>;
   if (!isAdmin) return null;
 
   return (
     <div className="min-h-screen p-4 md:p-8 max-w-[1600px] mx-auto relative">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-3">
+        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-3
+          text-gray-900 dark:text-white"
+        >
           <span className="bg-red-600 text-xs px-2 py-1 rounded text-white font-bold tracking-wider">
             ADMIN
           </span>{" "}
@@ -189,13 +225,17 @@ export default function AdminPage() {
         <div className="flex gap-3">
           <Link
             href="/pages/admin/user"
-            className="flex items-center gap-2 bg-[#252525] hover:bg-[#333] text-gray-200 border border-[#333] px-4 py-2 rounded-xl font-bold transition-all shadow-lg text-sm"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all shadow-sm hover:shadow-md text-sm border
+              /* ☀️ Light Mode */
+              bg-white text-gray-700 border-gray-200 hover:bg-gray-50
+              /* 🌙 Dark Mode */
+              dark:bg-[#252525] dark:text-gray-200 dark:border-[#333] dark:hover:bg-[#333]"
           >
             <FaUsers className="text-blue-500" /> List Users
           </Link>
           <Link
             href="/pages/request"
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-lg text-sm"
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-lg text-sm border border-transparent"
           >
             <FaPlus /> New Request
           </Link>
@@ -204,64 +244,93 @@ export default function AdminPage() {
 
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-          {columns.map((col) => (
-            <div key={col.id} className="flex flex-col h-full">
-              <div
-                className={`flex items-center justify-between px-4 py-3 mb-4 rounded-xl border-t-4 bg-[#1e1e1e] ${col.border} shadow-lg`}
-              >
-                <div className="flex items-center gap-2">
-                  {col.id === "done" && <FaCheckCircle className="text-green-500" />}
-                  {col.id === "in progress" && (
-                    <FaPlay className="text-yellow-500 text-[10px]" />
-                  )}
-                  <h2 className="font-black text-gray-400 text-xs tracking-[0.2em] uppercase">
-                    {col.title}
-                  </h2>
-                </div>
-                <span className="bg-[#333] text-gray-400 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                  {tickets.filter((t) => t.status === col.id).length}
-                </span>
-              </div>
-              <Droppable droppableId={col.id}>
-                {(provided, snapshot) => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className={`flex-1 rounded-2xl p-2 transition-colors min-h-[500px] ${
-                      snapshot.isDraggingOver ? "bg-[#252525]/30 border-2 border-dashed border-[#444]" : ""
-                    }`}
-                  >
-                    {tickets
-                      .filter((t) => t.status === col.id)
-                      .map((ticket, index) => (
-                        <Draggable
-                          key={ticket.id}
-                          draggableId={ticket.id.toString()}
-                          index={index}
-                        >
-                          {(provided, snapshot) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              {...provided.dragHandleProps}
-                              className={`mb-4 ${snapshot.isDragging ? "z-50" : ""}`}
-                            >
-                              <AdminTicketCard
-                                ticket={ticket}
-                                colId={col.id}
-                                confirmDelete={(id) => setTicketToDelete(id)}
-                                advanceStatus={advanceStatus}
-                              />
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                    {provided.placeholder}
+          {columns.map((col) => {
+            const colors = getHeaderColors(col.id);
+            return (
+              <div key={col.id} className="flex flex-col h-full">
+                {/* 🏗️ Column Header */}
+                <div
+                  className={`flex items-center justify-between px-4 py-3 mb-4 rounded-xl border-t-4 shadow-sm
+                    /* Base borders for sides and bottom */
+                    border-x border-b
+                    
+                    /* ☀️ Light Mode: White BG */
+                    bg-white 
+
+                    /* 🌙 Dark Mode: Dark BG. Shadow adjustment. */
+                    dark:bg-[#1e1e1e] dark:shadow-lg 
+                    
+                    /* Dynamic Colored Borders (Applies to both modes via helper) */
+                    ${colors.border}
+
+                    /* Top Border Color (Thick line) */
+                    ${col.border}`}
+                >
+                  <div className="flex items-center gap-2">
+                    {/* Icons */}
+                    {col.id === "new" && <FaRegCircle className={`${colors.icon} text-[10px]`} />}
+                    {col.id === "done" && <FaCheckCircle className={colors.icon} />}
+                    {col.id === "in progress" && <FaPlay className={`${colors.icon} text-[10px]`} />}
+                    {col.id === "accepted" && <FaLayerGroup className={colors.icon} />}
+
+                    {/* Colored Title */}
+                    <h2 className={`font-black text-xs tracking-[0.2em] uppercase ${colors.text}`}>
+                      {col.title}
+                    </h2>
                   </div>
-                )}
-              </Droppable>
-            </div>
-          ))}
+                  
+                  {/* Badge - REVERTED to Neutral Gray/Dark Style */}
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full
+                    bg-gray-100 text-gray-600
+                    dark:bg-[#333] dark:text-gray-400"
+                  >
+                    {tickets.filter((t) => t.status === col.id).length}
+                  </span>
+                </div>
+                
+                <Droppable droppableId={col.id}>
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className={`flex-1 rounded-2xl p-2 transition-colors min-h-[500px] ${
+                        snapshot.isDraggingOver 
+                          ? "bg-gray-100/50 border-2 border-dashed border-gray-300 dark:bg-[#252525]/30 dark:border-[#444]" 
+                          : ""
+                      }`}
+                    >
+                      {tickets
+                        .filter((t) => t.status === col.id)
+                        .map((ticket, index) => (
+                          <Draggable
+                            key={ticket.id}
+                            draggableId={ticket.id.toString()}
+                            index={index}
+                          >
+                            {(provided, snapshot) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                {...provided.dragHandleProps}
+                                className={`mb-4 ${snapshot.isDragging ? "z-50" : ""}`}
+                              >
+                                <AdminTicketCard
+                                  ticket={ticket}
+                                  colId={col.id}
+                                  confirmDelete={(id) => setTicketToDelete(id)}
+                                  advanceStatus={advanceStatus}
+                                />
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </div>
+            );
+          })}
         </div>
       </DragDropContext>
 
