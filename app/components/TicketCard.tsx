@@ -41,29 +41,24 @@ export default function TicketCard({ ticket }: TicketCardProps) {
         return {
           label: "Queue",
           icon: <FaLayerGroup size={8} />,
-          // ☀️ Light Mode: Solid Blue BG, White Text
-          // 🌙 Dark Mode: Glassy Blue
           badgeClass: "bg-blue-600 text-white border-blue-600 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-500/50",
         };
       case "in progress":
         return {
           label: "In Progress",
           icon: <FaPlay size={8} />,
-          // ☀️ Light Mode: Solid Yellow BG, White Text
           badgeClass: "bg-yellow-500 text-white border-yellow-500 dark:bg-yellow-900/60 dark:text-yellow-300 dark:border-yellow-500/50",
         };
       case "done":
         return {
           label: "Completed",
           icon: <FaCheckCircle size={8} />,
-          // ☀️ Light Mode: Solid Green BG, White Text
           badgeClass: "bg-green-600 text-white border-green-600 dark:bg-green-900/60 dark:text-green-300 dark:border-green-500/50",
         };
       default: // New
         return {
           label: "New",
           icon: <FaRegCircle size={8} />,
-          // ☀️ Light Mode: Solid Gray BG, White Text
           badgeClass: "bg-gray-600 text-white border-gray-600 dark:bg-[#333] dark:text-gray-400 dark:border-white/10",
         };
     }
@@ -144,7 +139,8 @@ export default function TicketCard({ ticket }: TicketCardProps) {
         {/* =========================================================
             2. MAIN CONTENT OVERLAY
            ========================================================= */}
-        <div className="relative z-10 p-4 flex-1 flex items-center">
+        {/* 👇 CHANGED: Set min-h to exactly 145px */}
+        <div className="relative z-10 p-4 flex-1 flex items-center min-h-[145px]">
           <div className="flex gap-3 items-center w-full">
             
             {/* Thumbnail Box */}
