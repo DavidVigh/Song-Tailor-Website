@@ -126,11 +126,13 @@ export default function AdminTicketCard({
           </div>
         </Link>
 
-        {/* Badges */}
+        {/* Badges - UPDATED per request */}
         <div className="flex gap-1.5 transition-opacity duration-200 group-hover:opacity-0 group-hover:pointer-events-none">
           {ticket.hype && (
             <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase flex items-center gap-1 shadow-md border
-              bg-white/95 text-red-600 border-red-200 backdrop-blur-md
+              /* ☀️ Light Mode: Solid Red BG, White Text */
+              bg-red-600 text-white border-red-600 backdrop-blur-md
+              /* 🌙 Dark Mode: Glassy Red */
               dark:bg-red-900/60 dark:text-red-300 dark:border-red-500/50 dark:rounded-md dark:shadow-sm"
             >
               <FaFire size={8} /> Hype
@@ -138,8 +140,9 @@ export default function AdminTicketCard({
           )}
           <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border shadow-md backdrop-blur-md
             ${isChoreo 
-              ? "bg-white/95 text-purple-600 border-purple-200 dark:bg-purple-900/60 dark:text-purple-300 dark:border-purple-500/50 dark:rounded-md" 
-              : "bg-white/95 text-blue-600 border-blue-200 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-500/50 dark:rounded-md"
+              /* ☀️ Light Mode: Solid Purple/Blue BG, White Text */
+              ? "bg-purple-600 text-white border-purple-600 dark:bg-purple-900/60 dark:text-purple-300 dark:border-purple-500/50 dark:rounded-md" 
+              : "bg-blue-600 text-white border-blue-600 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-500/50 dark:rounded-md"
             }`}
           >
             {ticket.music_category || "CHOREO"}
