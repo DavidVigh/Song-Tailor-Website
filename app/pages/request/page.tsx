@@ -53,6 +53,12 @@ export default function RequestSongPage() {
   };
 
   const addLinkField = () => {
+    // Double check constraint (though button should be hidden)
+    if (musicCategory === "class music" && youtubeLinks.length >= 1) {
+         showToast("Class Music allows only 1 link.", "info");
+         return;
+    }
+
     if (youtubeLinks.length < 5) {
         setYoutubeLinks([...youtubeLinks, ""]);
     } else {
@@ -76,13 +82,13 @@ export default function RequestSongPage() {
         return;
     }
 
-    // 🛠️ Data Cleaning: Ensure integers are sent as numbers or null, never empty strings
+    // 🛠️ Data Cleaning
     let finalBaseBpm: number | null = baseBpm ? parseInt(baseBpm) : null;
     let finalTargetBpm: number | null = targetBpm ? parseInt(targetBpm) : null;
 
     if (musicCategory === "choreo") {
-        finalBaseBpm = null; // Choreo doesn't use base BPM
-        if (!hasTargetBpm) finalTargetBpm = null; // Clear target if checkbox is unticked
+        finalBaseBpm = null; 
+        if (!hasTargetBpm) finalTargetBpm = null; 
     }
 
     setLoading(true);
@@ -94,7 +100,7 @@ export default function RequestSongPage() {
         youtube_link: validLinks, 
         base_bpm: finalBaseBpm,
         target_bpm: finalTargetBpm,
-        deadline: deadline || null, // Optional deadline
+        deadline: deadline || null,
         music_category: musicCategory,
         description: musicCategory === "choreo" ? description : "",
         hype: musicCategory === "choreo" ? isHype : false,
@@ -114,13 +120,27 @@ export default function RequestSongPage() {
   const isTargetBpmDisabled = musicCategory === "choreo" && !hasTargetBpm;
 
   return (
-    <div className="min-h-screen p-4 sm:p-8 bg-[#121212] text-white flex justify-center items-start pt-10 sm:pt-20">
-      <div className="w-full max-w-2xl bg-[#1e1e1e] border border-[#333] rounded-2xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+    <div className="min-h-screen p-4 sm:p-8 flex justify-center items-start pt-10 sm:pt-20
+      /* ☀️ Light Mode */
+      bg-gray-50 text-gray-900
+      /* 🌙 Dark Mode */
+      dark:bg-[#121212] dark:text-white"
+    >
+      <div className="w-full max-w-2xl border rounded-2xl p-6 sm:p-8 shadow-xl relative overflow-hidden
+        /* ☀️ Light Mode */
+        bg-white border-gray-200
+        /* 🌙 Dark Mode */
+        dark:bg-[#1e1e1e] dark:border-[#333] dark:shadow-2xl"
+      >
         
         {/* Decorative Glow */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+        <div className="absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none
+          bg-blue-600/10 dark:bg-blue-600/10" 
+        />
 
-        <h1 className="text-2xl sm:text-3xl font-bold mb-6 flex items-center gap-3 relative z-10">
+        <h1 className="text-2xl sm:text-3xl font-bold mb-6 flex items-center gap-3 relative z-10
+          text-gray-900 dark:text-white"
+        >
           <FaMusic className="text-blue-500" /> New Song Request
         </h1>
 
@@ -128,10 +148,18 @@ export default function RequestSongPage() {
           
           {/* Project Title */}
           <div>
-            <label className="block text-sm font-bold text-gray-400 mb-2">Project Title</label>
+            <label className="block text-sm font-bold mb-2
+              text-gray-600 dark:text-gray-400"
+            >
+              Project Title
+            </label>
             <input
               type="text"
-              className="w-full bg-[#252525] border border-[#444] rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none transition-colors"
+              className="w-full rounded-xl p-3 border focus:outline-none transition-colors
+                /* ☀️ Light Mode */
+                bg-gray-50 border-gray-300 text-gray-900 focus:border-blue-500
+                /* 🌙 Dark Mode */
+                dark:bg-[#252525] dark:border-[#444] dark:text-white dark:focus:border-blue-500"
               placeholder="e.g. Summer Vibe Mix"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -141,9 +169,13 @@ export default function RequestSongPage() {
 
           {/* YouTube Links */}
           <div>
-            <label className="block text-sm font-bold text-gray-400 mb-2 flex justify-between">
+            <label className="block text-sm font-bold mb-2 flex justify-between
+              text-gray-600 dark:text-gray-400"
+            >
                 <span>YouTube Links</span>
-                <span className="text-xs font-normal text-gray-500">Up to 5 links</span>
+                <span className="text-xs font-normal text-gray-500">
+                    {musicCategory === "choreo" ? "Up to 5 links" : "1 link allowed"}
+                </span>
             </label>
             <div className="space-y-3">
                 {youtubeLinks.map((link, index) => (
@@ -152,7 +184,11 @@ export default function RequestSongPage() {
                             <FaYoutube className="absolute left-3 top-3.5 text-red-500" />
                             <input
                                 type="url"
-                                className="w-full bg-[#252525] border border-[#444] rounded-xl p-3 pl-10 text-white focus:border-blue-500 focus:outline-none transition-colors"
+                                className="w-full rounded-xl p-3 pl-10 border focus:outline-none transition-colors
+                                  /* ☀️ Light Mode */
+                                  bg-gray-50 border-gray-300 text-gray-900 focus:border-blue-500
+                                  /* 🌙 Dark Mode */
+                                  dark:bg-[#252525] dark:border-[#444] dark:text-white dark:focus:border-blue-500"
                                 placeholder="https://youtube.com/..."
                                 value={link}
                                 onChange={(e) => handleLinkChange(index, e.target.value)}
@@ -163,7 +199,9 @@ export default function RequestSongPage() {
                             <button 
                                 type="button" 
                                 onClick={() => removeLinkField(index)}
-                                className="px-3 py-2 bg-red-900/20 text-red-400 rounded-xl hover:bg-red-900/40 transition-colors"
+                                className="px-3 py-2 rounded-xl transition-colors
+                                  bg-red-50 text-red-500 hover:bg-red-100
+                                  dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
                             >
                                 ✕
                             </button>
@@ -171,11 +209,13 @@ export default function RequestSongPage() {
                     </div>
                 ))}
             </div>
-            {youtubeLinks.length < 5 && (
+            
+            {/* Show Add Button ONLY if category is Choreo AND links < 5 */}
+            {musicCategory === "choreo" && youtubeLinks.length < 5 && (
                 <button 
                     type="button" 
                     onClick={addLinkField}
-                    className="mt-3 text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors"
+                    className="mt-3 text-sm font-bold text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
                 >
                     + Add Another Link
                 </button>
@@ -189,15 +229,23 @@ export default function RequestSongPage() {
                 
                 {/* 1. Base BPM: Only for Class Music */}
                 {musicCategory === "class music" && (
-                  <div className="flex-1">
-                      <label className="block text-sm font-bold text-gray-400 mb-2">Base BPM</label>
+                  <div className="flex-1 animate-in fade-in slide-in-from-left-2">
+                      <label className="block text-sm font-bold mb-2
+                        text-gray-600 dark:text-gray-400"
+                      >
+                        Base BPM
+                      </label>
                       <div className="relative">
-                          <FaClock className="absolute left-3 top-3.5 text-gray-500" />
+                          <FaClock className="absolute left-3 top-3.5 text-gray-400" />
                           <input
                             type="number"
                             min="60"
                             max="220"
-                            className="w-full bg-[#252525] border border-[#444] rounded-xl p-3 pl-10 text-white focus:border-blue-500 focus:outline-none transition-colors"
+                            className="w-full rounded-xl p-3 pl-10 border focus:outline-none transition-colors
+                              /* ☀️ Light Mode */
+                              bg-gray-50 border-gray-300 text-gray-900 focus:border-blue-500
+                              /* 🌙 Dark Mode */
+                              dark:bg-[#252525] dark:border-[#444] dark:text-white dark:focus:border-blue-500"
                             placeholder="120"
                             value={baseBpm}
                             onChange={(e) => setBaseBpm(e.target.value)}
@@ -212,26 +260,42 @@ export default function RequestSongPage() {
                     {musicCategory === "choreo" ? (
                       <div 
                         onClick={() => setHasTargetBpm(!hasTargetBpm)}
-                        className="flex items-center gap-2 mb-2 cursor-pointer group"
+                        className="flex items-center gap-2 mb-2 cursor-pointer group select-none"
                       >
                          <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors
-                             ${hasTargetBpm ? "bg-blue-600 border-blue-600" : "border-gray-500 group-hover:border-gray-400"}
+                            ${hasTargetBpm 
+                              ? "bg-blue-600 border-blue-600" 
+                              : "border-gray-400 group-hover:border-gray-500 dark:border-gray-500 dark:group-hover:border-gray-400"}
                          `}>
-                             {hasTargetBpm && <FaCheck size={10} />}
+                             {hasTargetBpm && <FaCheck size={10} className="text-white" />}
                          </div>
-                         <label className="text-sm font-bold text-gray-400 cursor-pointer">Set Target BPM?</label>
+                         <label className="text-sm font-bold cursor-pointer
+                           text-gray-600 dark:text-gray-400"
+                         >
+                           Set Target BPM?
+                         </label>
                       </div>
                     ) : (
-                      <label className="block text-sm font-bold text-gray-400 mb-2">Target BPM</label>
+                      <label className="block text-sm font-bold mb-2
+                        text-gray-600 dark:text-gray-400"
+                      >
+                        Target BPM
+                      </label>
                     )}
 
                     <div className={`relative transition-opacity duration-200 ${isTargetBpmDisabled ? "opacity-40" : "opacity-100"}`}>
-                        <FaClock className="absolute left-3 top-3.5 text-gray-500" />
+                        <FaClock className="absolute left-3 top-3.5 text-gray-400" />
                         <input
                             type="number"
                             min="60"
                             max="220"
-                            className={`w-full bg-[#252525] border border-[#444] rounded-xl p-3 pl-10 text-white focus:border-blue-500 focus:outline-none transition-colors ${isTargetBpmDisabled ? "cursor-not-allowed" : ""}`}
+                            className={`w-full rounded-xl p-3 pl-10 border focus:outline-none transition-colors
+                              /* ☀️ Light Mode */
+                              bg-gray-50 border-gray-300 text-gray-900 focus:border-blue-500
+                              /* 🌙 Dark Mode */
+                              dark:bg-[#252525] dark:border-[#444] dark:text-white dark:focus:border-blue-500
+                              ${isTargetBpmDisabled ? "cursor-not-allowed" : ""}
+                            `}
                             placeholder="128"
                             value={targetBpm}
                             onChange={(e) => setTargetBpm(e.target.value)}
@@ -244,15 +308,21 @@ export default function RequestSongPage() {
 
             {/* Deadline (Optional) */}
             <div>
-              <label className="block text-sm font-bold text-gray-400 mb-2">
-                Deadline <span className="text-gray-600 font-normal">(Optional)</span>
+              <label className="block text-sm font-bold mb-2
+                text-gray-600 dark:text-gray-400"
+              >
+                Deadline <span className="text-gray-500 font-normal">(Optional)</span>
               </label>
               <div className="relative">
-                <FaCalendarAlt className="absolute left-3 top-3.5 text-gray-500" />
+                <FaCalendarAlt className="absolute left-3 top-3.5 text-gray-400" />
                 <input
                   type="date"
-                  className="w-full bg-[#252525] border border-[#444] rounded-xl p-3 pl-10 text-white focus:border-blue-500 focus:outline-none transition-colors appearance-none"
-                  style={{ colorScheme: "dark" }}
+                  className="w-full rounded-xl p-3 pl-10 border focus:outline-none transition-colors appearance-none
+                    /* ☀️ Light Mode */
+                    bg-gray-50 border-gray-300 text-gray-900 focus:border-blue-500
+                    /* 🌙 Dark Mode */
+                    dark:bg-[#252525] dark:border-[#444] dark:text-white dark:focus:border-blue-500
+                    [color-scheme:light] dark:[color-scheme:dark]"
                   value={deadline}
                   onChange={(e) => setDeadline(e.target.value)}
                 />
@@ -263,19 +333,39 @@ export default function RequestSongPage() {
 
           {/* Category Selector */}
           <div>
-            <label className="block text-sm font-bold text-gray-400 mb-2">Category</label>
+            <label className="block text-sm font-bold mb-2
+              text-gray-600 dark:text-gray-400"
+            >
+              Category
+            </label>
             <div className="grid grid-cols-2 gap-4">
                 <button
                     type="button"
-                    onClick={() => { setMusicCategory("class music"); setIsHype(false); }}
-                    className={`p-4 rounded-xl border transition-all font-bold ${musicCategory === "class music" ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20" : "bg-[#252525] border-[#444] text-gray-400 hover:border-gray-300"}`}
+                    onClick={() => { 
+                      setMusicCategory("class music"); 
+                      setIsHype(false); 
+                      // If user had multiple links, trim to 1 and notify
+                      if (youtubeLinks.length > 1) {
+                        setYoutubeLinks([youtubeLinks[0]]);
+                        showToast("Class Music allows only 1 link. Extra links removed.", "info");
+                      }
+                    }}
+                    className={`p-4 rounded-xl border transition-all font-bold 
+                      ${musicCategory === "class music" 
+                        ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20" 
+                        : "bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-300 dark:bg-[#252525] dark:border-[#444] dark:text-gray-400 dark:hover:border-gray-300"
+                      }`}
                 >
                     Class Music
                 </button>
                 <button
                     type="button"
                     onClick={() => setMusicCategory("choreo")}
-                    className={`p-4 rounded-xl border transition-all font-bold ${musicCategory === "choreo" ? "bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-900/20" : "bg-[#252525] border-[#444] text-gray-400 hover:border-gray-300"}`}
+                    className={`p-4 rounded-xl border transition-all font-bold 
+                      ${musicCategory === "choreo" 
+                        ? "bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-900/20" 
+                        : "bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-300 dark:bg-[#252525] dark:border-[#444] dark:text-gray-400 dark:hover:border-gray-300"
+                      }`}
                 >
                     Choreo
                 </button>
@@ -284,27 +374,49 @@ export default function RequestSongPage() {
 
           {/* Conditional Choreo Extras */}
           {musicCategory === "choreo" && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-200">
                 <div 
                     onClick={() => setIsHype(!isHype)}
-                    className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all ${isHype ? "bg-red-900/20 border-red-500/50" : "bg-[#252525] border-[#444] hover:border-gray-500"}`}
+                    className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-colors
+                      ${isHype 
+                        ? "bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-500/50" 
+                        : "bg-gray-50 border-gray-200 hover:border-gray-300 dark:bg-[#252525] dark:border-[#444] dark:hover:border-gray-500"
+                      }`}
                 >
-                    <div className={`w-6 h-6 rounded-md border flex items-center justify-center ${isHype ? "bg-red-500 border-red-500 text-white" : "border-gray-500"}`}>
+                    <div className={`w-6 h-6 rounded-md border flex items-center justify-center transition-colors
+                      ${isHype 
+                        ? "bg-red-500 border-red-500 text-white" 
+                        : "border-gray-400 dark:border-gray-500"
+                      }`}
+                    >
                         {isHype && <FaCheck size={12} />}
                     </div>
                     <div className="flex-1">
-                        <h3 className={`font-bold text-sm ${isHype ? "text-red-400" : "text-gray-300"}`}>Level Assessment / Hype Track</h3>
+                        <h3 className={`font-bold text-sm transition-colors
+                          ${isHype 
+                            ? "text-red-600 dark:text-red-400" 
+                            : "text-gray-700 dark:text-gray-300"
+                          }`}
+                        >
+                          Level Assessment / Hype Track
+                        </h3>
                         <p className="text-xs text-gray-500 mt-0.5">High-energy assessment choreography</p>
                     </div>
-                    <FaFire className={`text-xl ${isHype ? "text-red-500 animate-pulse" : "text-gray-600"}`} />
+                    <FaFire className={`text-xl transition-colors ${isHype ? "text-red-500 animate-pulse" : "text-gray-400 dark:text-gray-600"}`} />
                 </div>
 
                 <div>
-                    <label className="block text-sm font-bold text-gray-400 mb-2 flex items-center gap-2">
-                        Description <FaInfoCircle className="text-gray-600" />
+                    <label className="block text-sm font-bold mb-2 flex items-center gap-2
+                      text-gray-600 dark:text-gray-400"
+                    >
+                        Description <FaInfoCircle className="text-gray-400" />
                     </label>
                     <textarea
-                        className="w-full bg-[#252525] border border-[#444] rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none min-h-[100px] resize-y"
+                        className="w-full rounded-xl p-3 border focus:outline-none min-h-[100px] resize-y transition-colors
+                          /* ☀️ Light Mode */
+                          bg-gray-50 border-gray-300 text-gray-900 focus:border-blue-500
+                          /* 🌙 Dark Mode */
+                          dark:bg-[#252525] dark:border-[#444] dark:text-white dark:focus:border-blue-500"
                         placeholder="Specific instructions, cuts, or vibe details..."
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
@@ -317,7 +429,7 @@ export default function RequestSongPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-4 rounded-xl shadow-lg transition-all transform active:scale-[0.98] flex items-center justify-center gap-2"
+            className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-4 rounded-xl shadow-lg transition-transform transform active:scale-[0.98] flex items-center justify-center gap-2"
           >
             {loading ? "Submitting..." : <><FaCheck /> Submit Request</>}
           </button>
