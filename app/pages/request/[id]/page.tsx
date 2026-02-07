@@ -4,44 +4,28 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { 
-  FaChevronLeft, 
-  FaChevronRight, 
-  FaClock, 
-  FaCheck, 
-  FaPlay, 
-  FaCheckDouble, 
-  FaTrash, 
-  FaSave,
-  FaCalendarAlt,
-  FaTachometerAlt,
-  FaLongArrowAltRight,
-  FaYoutube,
-  FaUser,
-  FaHome,
-  FaPlus,
-  FaList,
-  FaAlignLeft 
+  FaChevronLeft, FaChevronRight, FaClock, FaCheck, FaPlay, 
+  FaCheckDouble, FaTrash, FaSave, FaCalendarAlt, FaTachometerAlt, 
+  FaLongArrowAltRight, FaYoutube, FaUser, FaAlignLeft, FaFire
 } from "react-icons/fa";
 import { getYouTubeThumbnail } from "@/app/lib/utils";
 import { useToast } from "@/app/context/ToastContext";
+// ♻️ IMPORTS
+import { Ticket } from "@/app/types"; 
+import ConfirmationModal from "@/app/components/ConfirmationModal";
 
-// 🎨 COMPONENT: Montage Header (Static Background Collage)
+// 🎨 COMPONENT: Montage Header
 const MontageHeader = ({ images }: { images: string[] }) => {
-  const displayImages = images.length < 5 ? [...images, ...images, ...images] : images;
+  const displayImages = images.length < 5 
+    ? [...images, ...images, ...images, ...images].slice(0, 10) 
+    : images;
   
   return (
     <div className="absolute top-0 left-0 w-full h-[400px] z-0 overflow-hidden opacity-40 pointer-events-none select-none">
       <div className="absolute inset-0 flex w-full h-full">
         {displayImages.slice(0, 7).map((img, i) => (
-          <div 
-            key={i} 
-            className="relative h-full flex-1 overflow-hidden transform -skew-x-12 scale-125 border-r border-black/30"
-          >
-            <img 
-              src={img} 
-              alt="header-part" 
-              className="w-full h-full object-cover grayscale-[50%] opacity-70" 
-            />
+          <div key={i} className="relative h-full flex-1 overflow-hidden transform -skew-x-12 scale-125 border-r border-black/30">
+            <img src={img} alt="header-part" className="w-full h-full object-cover grayscale-[50%] opacity-70" />
           </div>
         ))}
       </div>
@@ -57,17 +41,12 @@ export default function RequestDetailPage() {
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [ticket, setTicket] = useState<any>(null);
+  const [deleting, setDeleting] = useState(false); // For modal loading state
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false); // Modal State
+
+  // ♻️ USE TYPE
+  const [ticket, setTicket] = useState<Ticket | null>(null);
   
-  // 🎢 INFINITE CAROUSEL STATE
-  const [currentIndex, setCurrentIndex] = useState(1);
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [videoTitles, setVideoTitles] = useState<Record<string, string>>({});
-
-  // 👆 TOUCH STATE
-  const touchStartX = useRef<number | null>(null);
-  const touchEndX = useRef<number | null>(null);
-
   // 🔐 Permissions
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -77,22 +56,28 @@ export default function RequestDetailPage() {
     deadline: ""
   });
 
-  // --- 1. DATA PREPARATION (Must happen before any returns) ---
+  // --- 1. DATA PREPARATION ---
   const links = ticket ? (Array.isArray(ticket.youtube_link) ? ticket.youtube_link : [ticket.youtube_link]) : [];
   
   const rawThumbnails = getYouTubeThumbnail(links);
   let thumbnails = Array.isArray(rawThumbnails) ? rawThumbnails : (rawThumbnails ? [rawThumbnails] : []);
-  // Upgrade to HD
   thumbnails = thumbnails.map(url => url.replace("hqdefault", "maxresdefault"));
   
   const totalSlides = thumbnails.length;
   const isChoreo = (ticket?.music_category || "").toLowerCase() === "choreo";
 
-  // Infinite Loop Array: [Last, ...Originals, First]
-  // We default to empty array if no data to prevent crash during loading
   const extendedThumbnails = totalSlides > 1 
     ? [thumbnails[totalSlides - 1], ...thumbnails, thumbnails[0]]
     : thumbnails;
+
+  // 🎢 INFINITE CAROUSEL STATE
+  const [currentIndex, setCurrentIndex] = useState(totalSlides > 1 ? 1 : 0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [videoTitles, setVideoTitles] = useState<Record<string, string>>({});
+
+  // 👆 TOUCH STATE
+  const touchStartX = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
 
   // Calculate Real Index
   let realActiveIndex = 0;
@@ -100,18 +85,23 @@ export default function RequestDetailPage() {
     if (currentIndex === 0) realActiveIndex = totalSlides - 1;
     else if (currentIndex === extendedThumbnails.length - 1) realActiveIndex = 0;
     else realActiveIndex = currentIndex - 1;
+  } else {
+    realActiveIndex = 0;
   }
 
   const currentLink = links[realActiveIndex] || links[0] || "#";
   const currentTitle = videoTitles[currentLink] || "Watch on YouTube";
 
-  // --- 2. EFFECTS (Must be at top level) ---
+  // --- 2. EFFECTS ---
 
   useEffect(() => {
     if (id) fetchRequestData();
   }, [id]);
 
-  // Fetch YouTube Titles
+  useEffect(() => {
+    setCurrentIndex(thumbnails.length > 1 ? 1 : 0);
+  }, [thumbnails.length]);
+
   useEffect(() => {
     if (!ticket) return;
     const fetchTitles = async () => {
@@ -130,23 +120,16 @@ export default function RequestDetailPage() {
     if (links.length > 0) fetchTitles();
   }, [ticket]);
 
-  // 👻 TELEPORTATION EFFECT (Moved UP before returns)
+  // 👻 TELEPORTATION EFFECT
   useEffect(() => {
-    if (!isTransitioning) return;
-
+    if (!isTransitioning || totalSlides <= 1) return;
     const timeOut = setTimeout(() => {
       setIsTransitioning(false);
-      if (currentIndex === 0) {
-        setCurrentIndex(extendedThumbnails.length - 2);
-      } 
-      else if (currentIndex === extendedThumbnails.length - 1) {
-        setCurrentIndex(1);
-      }
+      if (currentIndex === 0) setCurrentIndex(extendedThumbnails.length - 2);
+      else if (currentIndex === extendedThumbnails.length - 1) setCurrentIndex(1);
     }, 700);
-
     return () => clearTimeout(timeOut);
-  }, [currentIndex, isTransitioning, extendedThumbnails.length]);
-
+  }, [currentIndex, isTransitioning, extendedThumbnails.length, totalSlides]);
 
   // --- 3. FUNCTIONS ---
 
@@ -167,7 +150,7 @@ export default function RequestDetailPage() {
         return; 
       }
 
-      setTicket(data);
+      setTicket(data as Ticket); // ♻️ Cast to Type
       setFormData({
         base_bpm: data.base_bpm || "",
         target_bpm: data.target_bpm || "",
@@ -192,6 +175,7 @@ export default function RequestDetailPage() {
       const { error } = await supabase.from("song_requests").update(updates).eq("id", id);
       if (error) throw error;
       showToast("Changes saved successfully!", "success");
+      setTicket((prev: any) => ({ ...prev, ...updates }));
     } catch (error) {
       showToast("Error saving changes.", "error");
     } finally {
@@ -207,12 +191,23 @@ export default function RequestDetailPage() {
     else showToast(`Status updated to ${newStatus}`, "success");
   }
 
-  async function deleteTicket() {
+  // ♻️ NEW DELETE LOGIC WITH MODAL
+  function handleDeleteClick() {
     if (!isAdmin) return;
-    if(!confirm("Delete this request?")) return;
+    setIsDeleteModalOpen(true);
+  }
+
+  async function confirmDelete() {
+    setDeleting(true);
     const { error } = await supabase.from("song_requests").delete().eq("id", id);
-    if (error) showToast("Failed to delete", "error");
-    else { showToast("Deleted", "info"); router.push("/pages/admin"); }
+    if (error) {
+        showToast("Failed to delete", "error");
+        setDeleting(false);
+        setIsDeleteModalOpen(false);
+    } else { 
+        showToast("Deleted successfully", "info"); 
+        router.push("/pages/admin"); 
+    }
   }
 
   // 🎠 NAVIGATION
@@ -221,15 +216,13 @@ export default function RequestDetailPage() {
     setIsTransitioning(true);
     setCurrentIndex(prev => prev + 1);
   };
-
   const prevSlide = () => {
     if (totalSlides <= 1 || isTransitioning) return;
     setIsTransitioning(true);
     setCurrentIndex(prev => prev - 1);
   };
-
   const goToSlide = (index: number) => {
-    if (isTransitioning) return;
+    if (isTransitioning || totalSlides <= 1) return;
     setIsTransitioning(true);
     setCurrentIndex(index + 1); 
   };
@@ -254,12 +247,13 @@ export default function RequestDetailPage() {
     switch (status) {
       case 'accepted': return <span className="bg-blue-900/80 text-blue-200 border border-blue-500/50 px-3 py-1 rounded-full text-sm font-bold flex items-center gap-2 backdrop-blur-md shadow-lg"><FaCheck /> Queue</span>;
       case 'in progress': return <span className="bg-yellow-900/80 text-yellow-200 border border-yellow-500/50 px-3 py-1 rounded-full text-sm font-bold flex items-center gap-2 backdrop-blur-md shadow-lg"><FaPlay /> Playing</span>;
-      case 'completed': return <span className="bg-green-900/80 text-green-200 border border-green-500/50 px-3 py-1 rounded-full text-sm font-bold flex items-center gap-2 backdrop-blur-md shadow-lg"><FaCheckDouble /> Done</span>;
+      case 'completed': 
+      case 'done': return <span className="bg-green-900/80 text-green-200 border border-green-500/50 px-3 py-1 rounded-full text-sm font-bold flex items-center gap-2 backdrop-blur-md shadow-lg"><FaCheckDouble /> Done</span>;
       default: return <span className="bg-gray-800/80 text-gray-300 border border-gray-600/50 px-3 py-1 rounded-full text-sm font-bold flex items-center gap-2 backdrop-blur-md shadow-lg"><FaClock /> Pending</span>;
     }
   };
 
-  // --- 4. RENDER (Early returns happen HERE, after all hooks) ---
+  // --- 4. RENDER ---
 
   if (loading) return <div className="min-h-screen bg-[#121212] text-white flex items-center justify-center">Loading...</div>;
   if (!ticket) return <div className="min-h-screen bg-[#121212] text-white flex items-center justify-center">Request Not Found</div>;
@@ -276,7 +270,8 @@ export default function RequestDetailPage() {
           <FaChevronLeft /> {isAdmin ? "Back to Board" : "Back"}
         </button>
         {isAdmin && (
-          <button onClick={deleteTicket} className="text-red-500 hover:text-red-400 p-2 rounded-lg hover:bg-red-900/20 transition-colors bg-black/30 backdrop-blur-md border border-white/10">
+          // ♻️ UPDATED DELETE BUTTON
+          <button onClick={handleDeleteClick} className="text-red-500 hover:text-red-400 p-2 rounded-lg hover:bg-red-900/20 transition-colors bg-black/30 backdrop-blur-md border border-white/10">
               <FaTrash />
           </button>
         )}
@@ -291,42 +286,42 @@ export default function RequestDetailPage() {
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
         >
-            
             {/* 🖼️ INFINITE SLIDER */}
             <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
                <div 
                  className={`absolute inset-0 flex h-full ${isTransitioning ? 'transition-transform duration-700 ease-in-out' : ''}`}
                  style={{ 
                    width: `${extendedThumbnails.length * 100}%`,
-                   transform: `translateX(-${(currentIndex * 100) / extendedThumbnails.length}%)` 
+                   transform: totalSlides > 1 ? `translateX(-${(currentIndex * 100) / extendedThumbnails.length}%)` : `translateX(0%)` 
                  }}
                >
                  {extendedThumbnails.map((img, idx) => (
-                   <div 
-                     key={idx}
-                     className="h-full bg-cover bg-center flex-1 relative"
-                     style={{ backgroundImage: `url('${img}')` }}
-                   >
+                   <div key={idx} className="h-full bg-cover bg-center flex-1 relative" style={{ backgroundImage: `url('${img}')` }}>
                       <div className="absolute inset-0 bg-black/20" />
                    </div>
                  ))}
                </div>
-               
                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent" />
                <div className="absolute inset-0 bg-black/30" />
             </div>
 
             <div className="relative z-10 p-6 sm:p-8">
-                
                 <div className="absolute top-6 right-6 z-20">
                     {getStatusBadge(ticket.status)}
                 </div>
 
                 <div className="flex flex-col gap-4 pointer-events-none">
                     <div className="w-full pr-24 sm:pr-0">
-                        <span className={`inline-block mb-3 px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider border shadow-lg backdrop-blur-sm ${isChoreo ? 'bg-purple-600/80 text-purple-100 border-purple-400/50' : 'bg-blue-600/80 text-blue-100 border-blue-400/50'}`}>
-                            {ticket.music_category || "Dance Class"}
-                        </span>
+                        <div className="flex gap-2 mb-3">
+                           <span className={`inline-block px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider border shadow-lg backdrop-blur-sm ${isChoreo ? 'bg-purple-600/80 text-purple-100 border-purple-400/50' : 'bg-blue-600/80 text-blue-100 border-blue-400/50'}`}>
+                               {ticket.music_category || "Dance Class"}
+                           </span>
+                           {ticket.hype && (
+                               <span className="inline-block px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider border shadow-lg backdrop-blur-sm bg-red-600/80 text-red-100 border-red-400/50 flex items-center gap-1">
+                                   <FaFire /> Hype
+                               </span>
+                           )}
+                        </div>
                         <h1 className="text-3xl md:text-5xl font-bold text-white mb-3 leading-tight drop-shadow-lg">
                             {ticket.title}
                         </h1>
@@ -340,8 +335,6 @@ export default function RequestDetailPage() {
 
                 {/* 🚀 CONTROLS AREA */}
                 <div className="flex flex-col items-center justify-center gap-3 mt-6 mb-4 pointer-events-auto">
-                    
-                    {/* YouTube Button */}
                     <a 
                       href={currentLink} 
                       target="_blank"
@@ -349,42 +342,17 @@ export default function RequestDetailPage() {
                       className="flex items-center gap-2 bg-red-600/90 hover:bg-red-600 text-white px-6 py-2 rounded-full backdrop-blur-md transition-all shadow-lg hover:shadow-red-900/50 border border-white/10 font-bold transform hover:-translate-y-0.5"
                     >
                         <FaYoutube size={18} /> 
-                        <span className="truncate max-w-[200px] sm:max-w-[300px]">
-                          {currentTitle}
-                        </span>
+                        <span className="truncate max-w-[200px] sm:max-w-[300px]">{currentTitle}</span>
                     </a>
-
-                    {/* Pagination */}
                     {totalSlides > 1 && (
                       <div className="flex items-center gap-4">
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); prevSlide(); }}
-                          className="hidden md:flex items-center justify-center w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 border border-white/10 text-white/80 hover:text-white transition-all backdrop-blur-sm"
-                        >
-                          <FaChevronLeft size={12} />
-                        </button>
-
+                        <button onClick={(e) => { e.stopPropagation(); prevSlide(); }} className="hidden md:flex items-center justify-center w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 border border-white/10 text-white/80 hover:text-white transition-all backdrop-blur-sm"><FaChevronLeft size={12} /></button>
                         <div className="flex justify-center gap-2">
                           {thumbnails.map((_, idx) => (
-                            <button 
-                              key={idx}
-                              onClick={(e) => { e.stopPropagation(); goToSlide(idx); }}
-                              onTouchStart={(e) => e.stopPropagation()}
-                              className={`transition-all duration-300 rounded-full shadow-sm ${
-                                idx === realActiveIndex 
-                                  ? "w-2.5 h-2.5 bg-white scale-110" 
-                                  : "w-2 h-2 bg-white/40 hover:bg-white/60"
-                              }`}
-                            />
+                            <button key={idx} onClick={(e) => { e.stopPropagation(); goToSlide(idx); }} onTouchStart={(e) => e.stopPropagation()} className={`transition-all duration-300 rounded-full shadow-sm ${idx === realActiveIndex ? "w-2.5 h-2.5 bg-white scale-110" : "w-2 h-2 bg-white/40 hover:bg-white/60"}`} />
                           ))}
                         </div>
-
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); nextSlide(); }}
-                          className="hidden md:flex items-center justify-center w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 border border-white/10 text-white/80 hover:text-white transition-all backdrop-blur-sm"
-                        >
-                          <FaChevronRight size={12} />
-                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); nextSlide(); }} className="hidden md:flex items-center justify-center w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 border border-white/10 text-white/80 hover:text-white transition-all backdrop-blur-sm"><FaChevronRight size={12} /></button>
                       </div>
                     )}
                 </div>
@@ -394,12 +362,10 @@ export default function RequestDetailPage() {
                   <div className="grid grid-cols-3 gap-3 mt-6 pt-6 border-t border-white/10 pointer-events-auto">
                       <button onClick={() => updateStatus('accepted')} className={`py-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all backdrop-blur-md shadow-lg ${ticket.status === 'accepted' ? 'bg-blue-600 text-white ring-2 ring-blue-400' : 'bg-black/40 text-gray-300 hover:bg-black/60 border border-white/10'}`}><FaCheck /> Accept</button>
                       <button onClick={() => updateStatus('in progress')} className={`py-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all backdrop-blur-md shadow-lg ${ticket.status === 'in progress' ? 'bg-yellow-600 text-white ring-2 ring-yellow-400' : 'bg-black/40 text-gray-300 hover:bg-black/60 border border-white/10'}`}><FaPlay /> Play</button>
-                      <button onClick={() => updateStatus('completed')} className={`py-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all backdrop-blur-md shadow-lg ${ticket.status === 'completed' ? 'bg-green-600 text-white ring-2 ring-green-400' : 'bg-black/40 text-gray-300 hover:bg-black/60 border border-white/10'}`}><FaCheckDouble /> Finish</button>
+                      <button onClick={() => updateStatus('done')} className={`py-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all backdrop-blur-md shadow-lg ${ticket.status === 'done' ? 'bg-green-600 text-white ring-2 ring-green-400' : 'bg-black/40 text-gray-300 hover:bg-black/60 border border-white/10'}`}><FaCheckDouble /> Finish</button>
                   </div>
                 ) : (
-                  <div className="mt-6 pt-6 border-t border-white/10 text-gray-400 text-sm italic">
-                    Status updates are managed by the admin.
-                  </div>
+                  <div className="mt-6 pt-6 border-t border-white/10 text-gray-400 text-sm italic">Status updates are managed by the admin.</div>
                 )}
             </div>
         </div>
@@ -410,9 +376,7 @@ export default function RequestDetailPage() {
              <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                <FaAlignLeft className="text-blue-500" /> Description
              </h3>
-             <p className="text-gray-200 leading-relaxed text-sm whitespace-pre-wrap font-light">
-               {ticket.description}
-             </p>
+             <p className="text-gray-200 leading-relaxed text-sm whitespace-pre-wrap font-light">{ticket.description}</p>
           </div>
         )}
 
@@ -434,10 +398,7 @@ export default function RequestDetailPage() {
                              </>
                            ) : (
                              <div className="w-full bg-[#222] border border-[#333] rounded-xl p-3 text-white flex items-center gap-2">
-                                <span className="text-blue-400 font-bold">{ticket.base_bpm || "?"}</span> 
-                                <span className="text-gray-500">to</span> 
-                                <span className="text-purple-400 font-bold">{ticket.target_bpm || "?"}</span> 
-                                <span className="text-xs text-gray-500 ml-auto">BPM</span>
+                                <span className="text-blue-400 font-bold">{ticket.base_bpm || "?"}</span> <span className="text-gray-500">to</span> <span className="text-purple-400 font-bold">{ticket.target_bpm || "?"}</span> <span className="text-xs text-gray-500 ml-auto">BPM</span>
                              </div>
                            )}
                         </div>
@@ -474,11 +435,23 @@ export default function RequestDetailPage() {
             )}
         </div>
       </div>
+
+      {/* ♻️ CONFIRMATION MODAL */}
+      <ConfirmationModal 
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={confirmDelete}
+        title="Delete Request?"
+        message="Are you sure you want to delete this request? This action cannot be undone."
+        confirmText="Delete Forever"
+        loading={deleting}
+      />
+
     </main>
   );
 }
 
-function UserCardContent({ ticket, isAdmin }: { ticket: any, isAdmin: boolean }) {
+function UserCardContent({ ticket, isAdmin }: { ticket: Ticket, isAdmin: boolean }) {
     return (
         <>
             <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-300">
