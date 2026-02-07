@@ -23,7 +23,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       {/* 👇 UPDATED BODY TAG */}
       <body
-        className={`${inter.className} min-h-screen bg-gray-50 dark:bg-[#121212] text-gray-900 dark:text-white transition-colors duration-700 ease-in-out`}
+        className={`${inter.className} min-h-screen bg-gray-50 dark:bg-[#121212] text-gray-900 dark:text-white`}
       >
         <ThemeProvider
           attribute="class"
