@@ -162,6 +162,28 @@ export default function AdminUserDetailPage() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel(`admin-user-tickets-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "song_requests", filter: `user_id=eq.${userId}` },
+        (payload) => {
+          setTickets((prev) =>
+            prev.map((ticket) =>
+              ticket.id === payload.new.id ? ({ ...ticket, ...payload.new } as Ticket) : ticket
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
   async function fetchData() {
     try {
       const { data: { user } } = await supabase.auth.getUser();

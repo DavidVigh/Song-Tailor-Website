@@ -20,6 +20,7 @@ function timeAgo(dateString: string) {
   const now = new Date();
   const date = new Date(dateString);
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (seconds <= 0) return "Just now";
   if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
@@ -67,6 +68,7 @@ export default function RequestDetailPage() {
   const { id } = useParams();
   const router = useRouter();
   const { showToast } = useToast();
+  const requestId = Array.isArray(id) ? id[0] : id;
   
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -112,6 +114,23 @@ export default function RequestDetailPage() {
 
   useEffect(() => { if (id) fetchRequestData(); }, [id]);
   useEffect(() => { setCurrentIndex(thumbnails.length > 1 ? 1 : 0); }, [thumbnails.length]);
+  useEffect(() => {
+    if (!requestId) return;
+    const channel = supabase
+      .channel(`song-request-${requestId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "song_requests", filter: `id=eq.${requestId}` },
+        (payload) => {
+          setTicket((prev) => (prev ? { ...prev, ...payload.new } : prev));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [requestId]);
 
   useEffect(() => {
     if (!ticket) return;
@@ -308,7 +327,7 @@ export default function RequestDetailPage() {
 
             {isAdmin && (
               /* Admin Buttons Row (Single row on mobile) */
-              <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mt-8 pt-6 border-t border-white/20">
+              <div className="grid grid-cols-3 gap-3 sm:gap-4 mt-8 pt-6 border-t border-white/20">
                 {[
                   { id: 'accepted', label: 'Queue', icon: FaCheck, color: 'blue' },
                   { id: 'in progress', label: 'Play', icon: FaPlay, color: 'yellow' },
@@ -346,7 +365,16 @@ export default function RequestDetailPage() {
                  </div>
                  <div className="flex-1 min-w-0">
                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Requester</p>
-                   <p className="font-black text-sm text-gray-900 dark:text-white truncate uppercase">{isAdmin ? ticket.profiles?.full_name : "Account Owner"}</p>
+                   {isAdmin && ticket.profiles?.id ? (
+                     <Link
+                       href={`/pages/admin/user/${ticket.profiles.id}`}
+                       className="font-black text-sm text-gray-900 dark:text-white truncate hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                     >
+                       {ticket.profiles?.full_name || "Account Owner"}
+                     </Link>
+                   ) : (
+                     <p className="font-black text-sm text-gray-900 dark:text-white truncate">{isAdmin ? ticket.profiles?.full_name : "Account Owner"}</p>
+                   )}
                  </div>
                </div>
              </div>

@@ -11,10 +11,33 @@ export default function MyTicketsPage() {
   const router = useRouter();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isPageLoading, setIsPageLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMyTickets();
   }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel(`my-tickets-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "song_requests", filter: `user_id=eq.${userId}` },
+        (payload) => {
+          setTickets((prev) =>
+            prev.map((ticket) =>
+              ticket.id === payload.new.id ? ({ ...ticket, ...payload.new } as Ticket) : ticket
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
 
   async function fetchMyTickets() {
     try {
@@ -24,6 +47,7 @@ export default function MyTicketsPage() {
         router.push("/auth"); 
         return; 
       }
+      setUserId(user.id);
 
       const { data, error } = await supabase
         .from("song_requests")
