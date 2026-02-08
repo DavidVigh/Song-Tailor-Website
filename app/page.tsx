@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { motion, Variants } from "framer-motion";
+import Pricing from "@/app/about/pricing/page";
 import {
   FaMusic,
   FaLayerGroup,
@@ -52,7 +53,7 @@ export default function LandingPage() {
       </div>
 
       {/* 🦸 SECTION 1: HERO */}
-      <main className="relative z-10 w-full px-6 md:px-12 lg:px-24 text-center flex flex-col items-center justify-center min-h-[100dvh] space-y-8">
+      <main className="relative z-10 w-full px-6 md:px-12 lg:px-24 text-center flex flex-col items-center justify-center min-h-dvh space-y-8">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -69,7 +70,7 @@ export default function LandingPage() {
           className="text-5xl md:text-7xl lg:text-9xl font-black tracking-tighter mb-4 leading-[1.1]"
         >
           Tailor Your <br />
-          <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 dark:from-blue-400 dark:via-purple-500 dark:to-pink-500 bg-clip-text text-transparent">
+          <span className="bg-linear-to-r from-blue-600 via-purple-600 to-pink-600 dark:from-blue-400 dark:via-purple-500 dark:to-pink-500 bg-clip-text text-transparent">
             Perfect Sound
           </span>
         </motion.h1>
@@ -225,7 +226,7 @@ export default function LandingPage() {
               ))}
             </ul>
           </div>
-          <div className="relative aspect-video rounded-3xl overflow-hidden bg-gradient-to-br from-blue-600 to-purple-700 flex items-center justify-center">
+          <div className="relative aspect-video rounded-3xl overflow-hidden bg-linear-to-br from-blue-600 to-purple-700 flex items-center justify-center">
             <FaMusic className="text-white/10 text-[10rem] absolute" />
             <p className="relative z-10 text-white font-black text-2xl uppercase tracking-widest text-center px-6">
               Precision editing for <br /> the modern stage.
@@ -257,6 +258,21 @@ export default function LandingPage() {
           >
             Get Started Now <FaMagic />
           </Link>
+        </motion.div>{" "}
+        {/* pricing */}
+        <motion.div
+          className="inline-block"
+          whileHover={{
+            scale: 1.02,
+          }} /* 🛠️ Reduced scale slightly to be safer */
+          whileTap={{ scale: 0.98 }}
+        >
+          <Link
+            href="/about/pricing"
+            className="inline-flex items-center gap-3 px-12 py-6 rounded-full font-bold text-2xl bg-blue-600 text-white hover:bg-blue-700 shadow-2xl shadow-blue-500/20"
+          >
+            View Pricing <FaArrowRight />
+          </Link>
         </motion.div>
       </motion.section>
     </div>
@@ -285,7 +301,7 @@ function StepCard({ num, icon, title, desc }: any) {
   return (
     <motion.div
       variants={fadeInUp}
-      className="p-8 rounded-[2rem] bg-white dark:bg-[#151515] border border-gray-200 dark:border-[#222] shadow-lg space-y-4 relative overflow-hidden group min-h-[220px]"
+      className="p-8 rounded-4xl bg-white dark:bg-[#151515] border border-gray-200 dark:border-[#222] shadow-lg space-y-4 relative overflow-hidden group min-h-55"
     >
       {/* 🛠️ FIX: Adjusted positioning from -top-2 -right-2 to top-4 right-4 or similar 
           to ensure they stay within the card's padding area and don't get cropped. */}
