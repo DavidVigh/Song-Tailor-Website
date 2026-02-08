@@ -76,17 +76,17 @@ export default function RequestDetailPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [formData, setFormData] = useState({ base_bpm: "", target_bpm: "", deadline: "" });
+  const [formData, setFormData] = useState({ target_bpm: "", deadline: "" });
   const [times, setTimes] = useState({ created: "", updated: "" });
 
-  const links = ticket ? (Array.isArray(ticket.youtube_link) ? ticket.youtube_link : [ticket.youtube_link]) : [];
+  const links = ticket ? (ticket.tracks?.map((t) => t.url).filter(Boolean) || []) : [];
   const rawThumbnails = getYouTubeThumbnail(links);
   let thumbnails = (Array.isArray(rawThumbnails) ? rawThumbnails : [rawThumbnails])
     .filter((url): url is string => url !== null && url !== undefined)
     .map(url => url.replace("hqdefault", "maxresdefault"));
   
   const totalSlides = thumbnails.length;
-  const isChoreo = (ticket?.music_category || "").toLowerCase() === "choreo";
+  const isChoreo = (ticket?.service_name || "").toLowerCase().includes("choreo");
   const extendedThumbnails = totalSlides > 1 ? [thumbnails[totalSlides - 1], ...thumbnails, thumbnails[0]] : thumbnails;
 
   const [currentIndex, setCurrentIndex] = useState(totalSlides > 1 ? 1 : 0);
@@ -167,7 +167,7 @@ export default function RequestDetailPage() {
       const { data, error } = await supabase.from("song_requests").select(`*, profiles (full_name, avatar_url, phone, id)`).eq("id", id).maybeSingle(); 
       if (error || !data || (profile?.role !== 'admin' && data.user_id !== user.id)) { setTicket(null); return; }
       setTicket(data as Ticket);
-      setFormData({ base_bpm: data.base_bpm || "", target_bpm: data.target_bpm || "", deadline: data.deadline || "" });
+      setFormData({ target_bpm: data.target_bpm || "", deadline: data.deadline || "" });
     } catch (error) {
     } finally { setIsPageLoading(false); }
   }
@@ -176,7 +176,7 @@ export default function RequestDetailPage() {
     if (!isAdmin) return; 
     try {
       setSaving(true);
-      const updates = { base_bpm: formData.base_bpm ? parseInt(formData.base_bpm) : null, target_bpm: formData.target_bpm ? parseInt(formData.target_bpm) : null, deadline: formData.deadline || null };
+      const updates = { target_bpm: formData.target_bpm ? parseInt(formData.target_bpm) : null, deadline: formData.deadline || null };
       const { error } = await supabase.from("song_requests").update(updates).eq("id", id);
       if (error) throw error;
       showToast("Updated!", "success");
@@ -288,7 +288,7 @@ export default function RequestDetailPage() {
             
             <div className="flex flex-col gap-2 sm:gap-4">
               <div className="flex gap-1.5 sm:gap-2">
-                <span className="px-3 py-1 rounded text-[9px] sm:text-[11px] font-black uppercase tracking-widest border shadow-sm bg-purple-600 text-white border-purple-500 dark:text-purple-300 dark:bg-purple-900/60 dark:border-purple-500">{ticket.music_category || "CHOREO"}</span>
+                <span className="px-3 py-1 rounded text-[9px] sm:text-[11px] font-black uppercase tracking-widest border shadow-sm bg-purple-600 text-white border-purple-500 dark:text-purple-300 dark:bg-purple-900/60 dark:border-purple-500">{ticket.service_name || "N/A"}</span>
                 {ticket.hype && <span className="px-3 py-1 rounded text-[9px] sm:text-[11px] font-black uppercase flex items-center gap-1 shadow-sm border bg-red-600 text-white border-red-500 dark:text-red-500 dark:bg-red-900/60 dark:border-red-500"><FaFire size={9} /> Hype</span>}
               </div>
               <h1 className="text-3xl sm:text-7xl font-black text-white leading-tight tracking-tighter max-w-[90%] drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]">{ticket.title}</h1>
@@ -353,7 +353,7 @@ export default function RequestDetailPage() {
              <div className="bg-white dark:bg-[#151515] border border-gray-200 dark:border-[#252525] rounded-[1.8rem] sm:rounded-[2rem] p-6 shadow-xl">
                <h3 className="text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2"><FaTachometerAlt className="text-blue-500" /> Technicals</h3>
                <div className="space-y-4">
-                 <p className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">{ticket.base_bpm || "?"} <FaLongArrowAltRight className="text-gray-400" /> {ticket.target_bpm || "?"} <span className="text-[10px] font-normal text-gray-500 uppercase tracking-widest ml-auto">bpm</span></p>
+                 <p className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">{ticket.tracks?.[0]?.base_bpm || "?"} <FaLongArrowAltRight className="text-gray-400" /> {ticket.target_bpm || ticket.tracks?.[0]?.target_bpm || "?"} <span className="text-[10px] font-normal text-gray-500 uppercase tracking-widest ml-auto">bpm</span></p>
                  <p className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-3"><FaCalendarAlt className="text-blue-500" /> {ticket.deadline ? new Date(ticket.deadline).toLocaleDateString() : "No Deadline"}</p>
                </div>
              </div>
