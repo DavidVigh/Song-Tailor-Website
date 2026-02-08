@@ -14,7 +14,8 @@ import {
   FaUsers,
   FaPlus,
   FaLayerGroup,
-  FaRegCircle
+  FaRegCircle,
+  FaMusic // Added for loader
 } from "react-icons/fa";
 import Link from "next/link";
 import { useToast } from "@/app/context/ToastContext";
@@ -34,6 +35,7 @@ const columns = [
 export default function AdminPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isPageLoading, setIsPageLoading] = useState(true); // 🪄 New state for themed loading
   const [deleting, setDeleting] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const { showToast } = useToast();
@@ -46,24 +48,38 @@ export default function AdminPage() {
   }, []);
 
   async function checkAdmin() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      router.push("/auth");
-      return;
-    }
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
+    try {
+      // 1. Get current user session
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        router.push("/auth");
+        return;
+      }
 
-    if (profile?.role !== "admin") {
+      // 2. Verify admin role
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      if (profile?.role !== "admin") {
+        router.push("/");
+        return;
+      }
+
+      // 3. Setup the board
+      setIsAdmin(true);
+      await fetchTickets();
+      setupRealtimeSubscription();
+      
+      // 4. Finally, reveal the page
+      setIsPageLoading(false);
+    } catch (err) {
+      console.error("Admin check error:", err);
       router.push("/");
-      return;
     }
-    setIsAdmin(true);
-    fetchTickets();
-    setupRealtimeSubscription(); // ⚡ Initialize Realtime
   }
 
   // ⚡ REALTIME SUBSCRIPTION SETUP
@@ -74,10 +90,7 @@ export default function AdminPage() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'song_requests' },
         async (payload) => {
-          console.log('Realtime change received!', payload);
-
           if (payload.eventType === 'INSERT') {
-            // New ticket added, we need to fetch the profile info for it to display correctly
             const { data: newTicket, error } = await supabase
               .from("song_requests")
               .select(`*, profiles (full_name, avatar_url)`)
@@ -89,25 +102,21 @@ export default function AdminPage() {
             }
           } 
           else if (payload.eventType === 'UPDATE') {
-            // Ticket updated (e.g. status change, updated_at trigger)
             setTickets((prev) => 
               prev.map((ticket) => 
                 ticket.id === payload.new.id 
-                  // Merge new data but keep existing profile info (payload doesn't have relations)
                   ? { ...ticket, ...payload.new } 
                   : ticket
               ).sort((a, b) => a.position - b.position)
             );
           } 
           else if (payload.eventType === 'DELETE') {
-            // Ticket deleted
             setTickets((prev) => prev.filter((ticket) => ticket.id !== payload.old.id));
           }
         }
       )
       .subscribe();
 
-    // Cleanup subscription on unmount
     return () => {
       supabase.removeChannel(channel);
     };
@@ -141,8 +150,6 @@ export default function AdminPage() {
     if (!draggedTicket) return;
 
     const newStatus = destination.droppableId as Ticket["status"];
-    
-    // Optimistic UI Update
     draggedTicket.status = newStatus;
 
     const destColumnTickets = allTickets
@@ -164,11 +171,8 @@ export default function AdminPage() {
     }
 
     draggedTicket.position = newPosition;
-    
-    // Update local state immediately
     setTickets([...allTickets].sort((a, b) => a.position - b.position));
 
-    // Update DB (The Trigger will run, update 'updated_at', and Realtime will send the new timestamp back)
     await supabase
       .from("song_requests")
       .update({ status: newStatus, position: newPosition })
@@ -179,7 +183,6 @@ export default function AdminPage() {
     if (!ticketToDelete) return;
     setDeleting(true);
 
-    // Optimistic delete from UI
     const previousTickets = [...tickets];
     setTickets((prev) => prev.filter((t) => t.id !== ticketToDelete));
 
@@ -191,7 +194,6 @@ export default function AdminPage() {
     setDeleting(false);
 
     if (error) {
-      // Revert if error
       setTickets(previousTickets);
       showToast("Failed to delete ticket", "error");
     } else {
@@ -216,7 +218,6 @@ export default function AdminPage() {
         : 0;
     const newPosition = lastPosition + 1000;
 
-    // Optimistic update
     setTickets((prev) =>
       prev.map((t) =>
         t.id === ticket.id
@@ -225,7 +226,6 @@ export default function AdminPage() {
       )
     );
     
-    // DB Update
     await supabase
       .from("song_requests")
       .update({ status: nextStatus, position: newPosition })
@@ -261,8 +261,24 @@ export default function AdminPage() {
     }
   };
 
-  if (loading)
-    return <div className="p-10 text-center text-gray-500 dark:text-white">Loading Admin Panel...</div>;
+  // 🛡️ THEMED LOADING STATE (Replaces the "Scuffed" plain text)
+  if (isPageLoading) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center space-y-6">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-blue-600/20 rounded-full" />
+          <div className="absolute inset-0 w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+        <div className="flex flex-col items-center space-y-2">
+          <FaMusic className="text-blue-500 text-2xl animate-bounce" />
+          <p className="text-gray-400 font-bold tracking-widest uppercase text-xs animate-pulse">
+            Syncing Admin Panel...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (!isAdmin) return null;
 
   return (
@@ -281,9 +297,7 @@ export default function AdminPage() {
           <Link
             href="/pages/admin/user"
             className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all shadow-sm hover:shadow-md text-sm border
-              /* ☀️ Light Mode */
               bg-white text-gray-700 border-gray-200 hover:bg-gray-50
-              /* 🌙 Dark Mode */
               dark:bg-[#252525] dark:text-gray-200 dark:border-[#333] dark:hover:bg-[#333]"
           >
             <FaUsers className="text-blue-500" /> List Users
@@ -303,31 +317,23 @@ export default function AdminPage() {
             const colors = getHeaderColors(col.id);
             return (
               <div key={col.id} className="flex flex-col h-full">
-                {/* 🏗️ Column Header */}
                 <div
                   className={`flex items-center justify-between px-4 py-3 mb-4 rounded-xl border-t-4 shadow-sm
                     border-x border-b
-                    /* ☀️ Light Mode */
                     bg-white 
-                    /* 🌙 Dark Mode */
                     dark:bg-[#1e1e1e] dark:shadow-lg 
                     ${colors.border}
                     ${col.border}`}
                 >
                   <div className="flex items-center gap-2">
-                    {/* Icons */}
                     {col.id === "new" && <FaRegCircle className={`${colors.icon} text-[10px]`} />}
                     {col.id === "done" && <FaCheckCircle className={colors.icon} />}
                     {col.id === "in progress" && <FaPlay className={`${colors.icon} text-[10px]`} />}
                     {col.id === "accepted" && <FaLayerGroup className={colors.icon} />}
-
-                    {/* Colored Title */}
                     <h2 className={`font-black text-xs tracking-[0.2em] uppercase ${colors.text}`}>
                       {col.title}
                     </h2>
                   </div>
-                  
-                  {/* Badge */}
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full
                     bg-gray-100 text-gray-600
                     dark:bg-[#333] dark:text-gray-400"

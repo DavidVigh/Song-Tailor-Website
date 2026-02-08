@@ -17,7 +17,7 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState(""); 
 
-  // Check if already logged in
+  // Check if already logged in on mount
   useEffect(() => {
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -28,11 +28,11 @@ export default function AuthPage() {
     checkUser();
   }, []);
 
-  // 🔄 SELF-HEALING CHECK ROLE
+  // 🔄 SELF-HEALING CHECK ROLE & REDIRECT
   async function checkRole(userId: string) {
     try {
       // 1. Try to get the profile
-      const { data: profile, error } = await supabase
+      const { data: profile } = await supabase
         .from("profiles")
         .select("role")
         .eq("id", userId)
@@ -43,7 +43,8 @@ export default function AuthPage() {
         if (profile.role === "admin") {
             router.push("/pages/admin");
         } else {
-            router.push("/pages/request");
+            // 🎯 Redirect to User Tickets
+            router.push("/pages/user/my-tickets");
         }
         return;
       }
@@ -53,7 +54,6 @@ export default function AuthPage() {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (user) {
-         // Use UPSERT here too for safety
          const { error: insertError } = await supabase.from("profiles").upsert([
            {
              id: user.id,
@@ -65,7 +65,8 @@ export default function AuthPage() {
 
          if (!insertError) {
              console.log("Profile auto-created. Redirecting...");
-             router.push("/pages/request");
+             // 🎯 Redirect to User Tickets
+             router.push("/pages/user/my-tickets");
          } else {
              console.error("Critical: Failed to auto-create profile:", JSON.stringify(insertError, null, 2));
              showToast("Account error. Please contact support.", "error");
@@ -96,9 +97,9 @@ export default function AuthPage() {
 
         if (error) throw error;
 
-        // Manually create profile using UPSERT (Safe Insert)
+        // Manually create/ensure profile using UPSERT
         if (data.user) {
-          const { error: profileError } = await supabase
+          await supabase
             .from("profiles")
             .upsert(
               [
@@ -109,12 +110,8 @@ export default function AuthPage() {
                   role: "user",
                 },
               ],
-              { onConflict: 'id' } // If ID exists, just update/ignore
+              { onConflict: 'id' }
             );
-            
-           if (profileError) {
-             console.error("Profile creation error:", JSON.stringify(profileError, null, 2));
-           }
         }
 
         showToast("Account created! Logging you in...", "success");
@@ -150,7 +147,7 @@ export default function AuthPage() {
     <div className="min-h-screen bg-[#121212] flex items-center justify-center p-4">
       <div className="bg-[#1e1e1e] border border-[#333] p-8 rounded-2xl shadow-2xl w-full max-w-md">
         
-        {/* Logo / Header */}
+        {/* Logo Icon */}
         <div className="flex justify-center mb-6">
             <div className="w-16 h-16 bg-blue-600/20 rounded-full flex items-center justify-center border border-blue-500/50 shadow-lg shadow-blue-500/20">
                 <FaMusic className="text-blue-500 text-3xl" />
@@ -166,9 +163,9 @@ export default function AuthPage() {
 
         <form onSubmit={handleAuth} className="space-y-4">
           
-          {/* Username Field (Only for Sign Up) */}
+          {/* Full Name (Sign Up Only) */}
           {isSignUp && (
-            <div className="relative animate-in fade-in slide-in-from-top-2">
+            <div className="relative">
               <FaUser className="absolute left-3 top-3.5 text-gray-500" />
               <input
                 type="text"
@@ -181,7 +178,7 @@ export default function AuthPage() {
             </div>
           )}
 
-          {/* Email Field */}
+          {/* Email */}
           <div className="relative">
             <FaEnvelope className="absolute left-3 top-3.5 text-gray-500" />
             <input
@@ -194,7 +191,7 @@ export default function AuthPage() {
             />
           </div>
 
-          {/* Password Field */}
+          {/* Password */}
           <div className="relative">
             <FaLock className="absolute left-3 top-3.5 text-gray-500" />
             <input
@@ -208,7 +205,6 @@ export default function AuthPage() {
             />
           </div>
 
-          {/* Submit Button */}
           <button
             type="submit"
             disabled={loading}
@@ -218,7 +214,6 @@ export default function AuthPage() {
           </button>
         </form>
 
-        {/* Toggle Mode */}
         <div className="text-center mt-6">
           <p className="text-sm text-gray-500">
             {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
