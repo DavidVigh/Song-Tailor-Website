@@ -21,6 +21,7 @@ export interface Ticket {
   description?: string;
   status: TicketStatus;
   created_at: string;
+  updated_at: string;
   position: number;
   hype?: boolean;
   profiles?: UserProfile;

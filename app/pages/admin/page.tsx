@@ -63,6 +63,54 @@ export default function AdminPage() {
     }
     setIsAdmin(true);
     fetchTickets();
+    setupRealtimeSubscription(); // ⚡ Initialize Realtime
+  }
+
+  // ⚡ REALTIME SUBSCRIPTION SETUP
+  function setupRealtimeSubscription() {
+    const channel = supabase
+      .channel('realtime tickets')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'song_requests' },
+        async (payload) => {
+          console.log('Realtime change received!', payload);
+
+          if (payload.eventType === 'INSERT') {
+            // New ticket added, we need to fetch the profile info for it to display correctly
+            const { data: newTicket, error } = await supabase
+              .from("song_requests")
+              .select(`*, profiles (full_name, avatar_url)`)
+              .eq("id", payload.new.id)
+              .single();
+            
+            if (newTicket && !error) {
+              setTickets((prev) => [...prev, newTicket as Ticket].sort((a, b) => a.position - b.position));
+            }
+          } 
+          else if (payload.eventType === 'UPDATE') {
+            // Ticket updated (e.g. status change, updated_at trigger)
+            setTickets((prev) => 
+              prev.map((ticket) => 
+                ticket.id === payload.new.id 
+                  // Merge new data but keep existing profile info (payload doesn't have relations)
+                  ? { ...ticket, ...payload.new } 
+                  : ticket
+              ).sort((a, b) => a.position - b.position)
+            );
+          } 
+          else if (payload.eventType === 'DELETE') {
+            // Ticket deleted
+            setTickets((prev) => prev.filter((ticket) => ticket.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }
 
   async function fetchTickets() {
@@ -93,6 +141,8 @@ export default function AdminPage() {
     if (!draggedTicket) return;
 
     const newStatus = destination.droppableId as Ticket["status"];
+    
+    // Optimistic UI Update
     draggedTicket.status = newStatus;
 
     const destColumnTickets = allTickets
@@ -114,8 +164,11 @@ export default function AdminPage() {
     }
 
     draggedTicket.position = newPosition;
+    
+    // Update local state immediately
     setTickets([...allTickets].sort((a, b) => a.position - b.position));
 
+    // Update DB (The Trigger will run, update 'updated_at', and Realtime will send the new timestamp back)
     await supabase
       .from("song_requests")
       .update({ status: newStatus, position: newPosition })
@@ -126,6 +179,7 @@ export default function AdminPage() {
     if (!ticketToDelete) return;
     setDeleting(true);
 
+    // Optimistic delete from UI
     const previousTickets = [...tickets];
     setTickets((prev) => prev.filter((t) => t.id !== ticketToDelete));
 
@@ -137,6 +191,7 @@ export default function AdminPage() {
     setDeleting(false);
 
     if (error) {
+      // Revert if error
       setTickets(previousTickets);
       showToast("Failed to delete ticket", "error");
     } else {
@@ -161,6 +216,7 @@ export default function AdminPage() {
         : 0;
     const newPosition = lastPosition + 1000;
 
+    // Optimistic update
     setTickets((prev) =>
       prev.map((t) =>
         t.id === ticket.id
@@ -168,40 +224,39 @@ export default function AdminPage() {
           : t
       )
     );
+    
+    // DB Update
     await supabase
       .from("song_requests")
       .update({ status: nextStatus, position: newPosition })
       .eq("id", ticket.id);
   }
 
-  /**
-   * Helper function to get theme-aware colors for each column.
-   */
   const getHeaderColors = (colId: string) => {
     switch (colId) {
-      case "accepted": // QUEUE -> Blue
+      case "accepted": 
         return {
           text: "text-blue-600 dark:text-blue-400",
           icon: "text-blue-500 dark:text-blue-400",
-          border: "border-blue-200 dark:border-blue-800/50", // Colored border matching text
+          border: "border-blue-200 dark:border-blue-800/50",
         };
-      case "in progress": // IN PROGRESS -> Yellow
+      case "in progress": 
         return {
           text: "text-yellow-600 dark:text-yellow-400",
           icon: "text-yellow-500 dark:text-yellow-400",
-          border: "border-yellow-200 dark:border-yellow-800/50", // Colored border matching text
+          border: "border-yellow-200 dark:border-yellow-800/50",
         };
-      case "done": // DONE -> Green
+      case "done":
         return {
           text: "text-green-600 dark:text-green-400",
           icon: "text-green-500 dark:text-green-400",
-          border: "border-green-200 dark:border-green-800/50", // Colored border matching text
+          border: "border-green-200 dark:border-green-800/50",
         };
-      default: // NEW -> Gray
+      default: 
         return {
           text: "text-gray-600 dark:text-gray-400",
           icon: "text-gray-400 dark:text-gray-500",
-          border: "border-gray-200 dark:border-gray-700", // Colored border matching text
+          border: "border-gray-200 dark:border-gray-700",
         };
     }
   };
@@ -251,19 +306,12 @@ export default function AdminPage() {
                 {/* 🏗️ Column Header */}
                 <div
                   className={`flex items-center justify-between px-4 py-3 mb-4 rounded-xl border-t-4 shadow-sm
-                    /* Base borders for sides and bottom */
                     border-x border-b
-                    
-                    /* ☀️ Light Mode: White BG */
+                    /* ☀️ Light Mode */
                     bg-white 
-
-                    /* 🌙 Dark Mode: Dark BG. Shadow adjustment. */
+                    /* 🌙 Dark Mode */
                     dark:bg-[#1e1e1e] dark:shadow-lg 
-                    
-                    /* Dynamic Colored Borders (Applies to both modes via helper) */
                     ${colors.border}
-
-                    /* Top Border Color (Thick line) */
                     ${col.border}`}
                 >
                   <div className="flex items-center gap-2">
@@ -279,7 +327,7 @@ export default function AdminPage() {
                     </h2>
                   </div>
                   
-                  {/* Badge - REVERTED to Neutral Gray/Dark Style */}
+                  {/* Badge */}
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full
                     bg-gray-100 text-gray-600
                     dark:bg-[#333] dark:text-gray-400"

@@ -9,10 +9,13 @@ import {
   FaFire,
   FaLayerGroup,
   FaRegCircle,
-  FaMusic
+  FaMusic,
 } from "react-icons/fa";
 import { getYouTubeThumbnail } from "@/app/lib/utils";
-import { CarouselThumbnail, BackgroundCarousel } from "@/app/components/TicketCarousels";
+import {
+  CarouselThumbnail,
+  BackgroundCarousel,
+} from "@/app/components/TicketCarousels";
 import { Ticket } from "@/app/types";
 
 interface TicketCardProps {
@@ -40,26 +43,30 @@ export default function TicketCard({ ticket }: TicketCardProps) {
       case "accepted": // Queue
         return {
           label: "Queue",
-          icon: <FaLayerGroup size={8} />,
-          badgeClass: "bg-blue-600 text-white border-blue-600 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-500/50",
+          icon: <FaLayerGroup size={10} />,
+          badgeClass:
+            "bg-blue-600 text-white border-blue-600 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-500/50",
         };
       case "in progress":
         return {
           label: "In Progress",
-          icon: <FaPlay size={8} />,
-          badgeClass: "bg-yellow-500 text-white border-yellow-500 dark:bg-yellow-900/60 dark:text-yellow-300 dark:border-yellow-500/50",
+          icon: <FaPlay size={10} />,
+          badgeClass:
+            "bg-yellow-500 text-white border-yellow-500 dark:bg-yellow-900/60 dark:text-yellow-300 dark:border-yellow-500/50",
         };
       case "done":
         return {
           label: "Completed",
-          icon: <FaCheckCircle size={8} />,
-          badgeClass: "bg-green-600 text-white border-green-600 dark:bg-green-900/60 dark:text-green-300 dark:border-green-500/50",
+          icon: <FaCheckCircle size={10} />,
+          badgeClass:
+            "bg-green-600 text-white border-green-600 dark:bg-green-900/60 dark:text-green-300 dark:border-green-500/50",
         };
       default: // New
         return {
           label: "New",
-          icon: <FaRegCircle size={8} />,
-          badgeClass: "bg-gray-600 text-white border-gray-600 dark:bg-[#333] dark:text-gray-400 dark:border-white/10",
+          icon: <FaRegCircle size={10} />,
+          badgeClass:
+            "bg-gray-600 text-white border-gray-600 dark:bg-[#333] dark:text-gray-400 dark:border-white/10",
         };
     }
   };
@@ -67,27 +74,27 @@ export default function TicketCard({ ticket }: TicketCardProps) {
   const statusInfo = getStatusInfo(ticket.status);
 
   return (
-    <div className="
+    <div
+      className="
       group relative overflow-hidden flex flex-col rounded-2xl transition-all duration-300 shadow-sm hover:shadow-md border
       /* ☀️ Light Mode */
       border-gray-200 bg-white
       /* 🌙 Dark Mode */
       dark:border-[#333] dark:hover:border-gray-500 dark:bg-[#1e1e1e]
-    ">
-      
+    "
+    >
       {/* =========================================================
-          TOP CONTAINER (Header + Body content over shared BG)
+          SINGLE CONTAINER (Header + Body + Footer over shared BG)
          ========================================================= */}
       <div className="relative flex-1 flex flex-col overflow-hidden group/image">
-        
-        {/* 🖼️ SHARED BACKGROUND LAYER */}
+        {/* 🖼️ SHARED BACKGROUND LAYER (Covers entire card) */}
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
           {thumbnails.length > 0 &&
             (hasMultipleImages ? (
               <BackgroundCarousel images={thumbnails} blur="blur-none" />
             ) : (
               <div
-                className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover/image:scale-110 
+                className="absolute inset-0 bg-cover bg-center 
                 /* ☀️ Light Mode */
                 opacity-100 filter brightness-110 contrast-105
                 /* 🌙 Dark Mode */
@@ -95,40 +102,42 @@ export default function TicketCard({ ticket }: TicketCardProps) {
                 style={{ backgroundImage: `url('${mainCover}')` }}
               />
             ))}
-          
+
           {/* Dark Mode Overlay */}
           <div className="absolute inset-0 hidden dark:block dark:bg-black/50 dark:group-hover/image:bg-black/40 transition-colors duration-300" />
         </div>
 
         {/* =========================================================
-            1. HEADER ROW (Transparent BG, Solid Badges)
+            1. HEADER ROW (Transparent)
            ========================================================= */}
         <div className="relative z-20 p-3 flex items-center justify-between bg-transparent">
-          {/* LEFT: Category & Hype Badges */}
+          {/* LEFT: Badges */}
           <div className="flex gap-1.5">
             {ticket.hype && (
-              <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase flex items-center gap-1 shadow-sm border
-                /* ☀️ Light Mode: Solid Red */
+              <span
+                className="px-2 py-0.5 rounded text-[10px] font-black uppercase flex items-center gap-1 shadow-sm border
                 bg-red-600 text-white border-red-600
-                /* 🌙 Dark Mode: Glassy Red */
                 dark:bg-red-900/60 dark:text-red-300 dark:border-red-500/50 dark:rounded-md"
               >
-                <FaFire size={8} /> Hype
+                <FaFire size={10} /> Hype
               </span>
             )}
-            
-            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border shadow-sm
-              ${isChoreo 
-                ? "bg-purple-600 text-white border-purple-600 dark:bg-purple-900/60 dark:text-purple-300 dark:border-purple-500/50 dark:rounded-md" 
-                : "bg-blue-600 text-white border-blue-600 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-500/50 dark:rounded-md"
+
+            <span
+              className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border shadow-sm
+              ${
+                isChoreo
+                  ? "bg-purple-600 text-white border-purple-600 dark:bg-purple-900/60 dark:text-purple-300 dark:border-purple-500/50 dark:rounded-md"
+                  : "bg-blue-600 text-white border-blue-600 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-500/50 dark:rounded-md"
               }`}
             >
               {ticket.music_category || "CHOREO"}
             </span>
           </div>
 
-          {/* RIGHT: Status Badge */}
-          <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border shadow-sm flex items-center gap-1.5
+          {/* RIGHT: Status */}
+          <span
+            className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border shadow-sm flex items-center gap-1.5
             ${statusInfo.badgeClass} dark:rounded-md`}
           >
             {statusInfo.icon}
@@ -139,18 +148,22 @@ export default function TicketCard({ ticket }: TicketCardProps) {
         {/* =========================================================
             2. MAIN CONTENT OVERLAY
            ========================================================= */}
-        {/* 👇 CHANGED: Set min-h to exactly 145px */}
         <div className="relative z-10 p-4 flex-1 flex items-center min-h-[145px]">
-          <div className="flex gap-3 items-center w-full">
-            
+          <div className="flex gap-4 items-center w-full">
             {/* Thumbnail Box */}
-            <div className="shrink-0 w-12 h-12 rounded-lg overflow-hidden shadow-lg border relative group/thumb
-              bg-white border-white
-              dark:bg-black dark:border-white/20"
+            {/* Thumbnail Box */}
+            <div
+              className="shrink-0 w-20 h-14 rounded-lg overflow-hidden shadow-lg border relative group/thumb
+  bg-white border-white
+  dark:bg-black dark:border-white/20"
             >
               {thumbnails.length > 0 ? (
                 hasMultipleImages ? (
-                  <CarouselThumbnail images={thumbnails} links={links} showIndicators={false} />
+                  <CarouselThumbnail
+                    images={thumbnails}
+                    links={links}
+                    showIndicators={false}
+                  />
                 ) : (
                   <a
                     href={links[0]}
@@ -161,29 +174,29 @@ export default function TicketCard({ ticket }: TicketCardProps) {
                   >
                     <img
                       src={mainCover}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover/thumb:scale-110"
+                      className="w-full h-full object-cover"
                       alt="thumb"
                     />
                     <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover/thumb:bg-black/20 transition-colors">
-                      <FaYoutube className="text-white drop-shadow-md transform group-hover/thumb:scale-125 transition-transform" />
+                      <FaYoutube className="text-white drop-shadow-md transition-all duration-300 transform group-hover/thumb:scale-125 group-hover/thumb:text-red-600" />
                     </div>
                   </a>
                 )
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-gray-300 dark:text-gray-500">
-                  <FaMusic size={16} />
+                  <FaMusic size={20} />
                 </div>
               )}
             </div>
 
-            <div className="flex-1 min-w-0 space-y-1">
+            <div className="flex-1 min-w-0 space-y-1.5">
               {/* Title */}
               <Link
                 href={`/pages/request/${ticket.id}`}
                 className="inline-block max-w-full group/title"
               >
-                <h3 className="text-sm font-bold truncate leading-tight transition-all
-                  /* ☀️ & 🌙 White Text + Strong Shadow */
+                <h3
+                  className="text-base font-bold truncate leading-tight transition-all
                   text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.9)] 
                   group-hover/title:text-blue-300 dark:group-hover/title:text-blue-400"
                 >
@@ -193,10 +206,10 @@ export default function TicketCard({ ticket }: TicketCardProps) {
 
               {/* Info Badges */}
               <div className="flex flex-wrap gap-2">
-                <div className="flex items-center gap-1 text-[9px] px-2 py-0.5 rounded border shadow-lg backdrop-blur-md
-                  /* ☀️ Light Mode */
+                <div
+                  className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border shadow-lg backdrop-blur-md
+                  /* Glassy look in both modes since it's over image */
                   bg-black/50 text-white border-white/20
-                  /* 🌙 Dark Mode */
                   dark:bg-black/60 dark:text-gray-200 dark:border-white/10"
                 >
                   <span className="font-bold opacity-80">BPM</span>
@@ -206,38 +219,36 @@ export default function TicketCard({ ticket }: TicketCardProps) {
                 </div>
 
                 {ticket.deadline && (
-                  <div className="flex items-center gap-1 text-[9px] px-2 py-0.5 rounded border shadow-lg backdrop-blur-md
+                  <div
+                    className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border shadow-lg backdrop-blur-md
                     /* ☀️ Light Mode */
                     bg-yellow-500/90 text-white border-yellow-400/50
                     /* 🌙 Dark Mode */
                     dark:bg-yellow-600/40 dark:text-yellow-100 dark:border-yellow-500/30"
                   >
-                    <FaClock size={8} className="text-white dark:text-yellow-400" />
-                    <span>{new Date(ticket.deadline).toLocaleDateString()}</span>
+                    <FaClock
+                      size={10}
+                      className="text-white dark:text-yellow-400"
+                    />
+                    <span>
+                      {new Date(ticket.deadline).toLocaleDateString()}
+                    </span>
                   </div>
                 )}
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* =========================================================
-          3. FOOTER ROW (Date Right)
-         ========================================================= */}
-      <div className="relative z-20 p-3 pt-3 flex justify-end items-center border-t
-        /* ☀️ Light Mode */
-        bg-white border-gray-100
-        /* 🌙 Dark Mode */
-        dark:bg-[#1e1e1e] dark:border-[#333]"
-      >
-        {/* Right: Created Date */}
-        <p className="text-[9px] uppercase tracking-wider font-bold
-          text-gray-400
-          dark:text-gray-500"
-        >
-          {new Date(ticket.created_at).toLocaleDateString()}
-        </p>
+        {/* =========================================================
+            3. FOOTER ROW (Transparent Background)
+           ========================================================= */}
+        <div className="relative z-20 p-3 pt-3 flex justify-end items-center border-t border-white/10">
+          {/* Right: Created Date */}
+          <p className="text-[10px] uppercase tracking-wider font-bold text-white/90 drop-shadow-md">
+            {new Date(ticket.created_at).toLocaleDateString()}
+          </p>
+        </div>
       </div>
     </div>
   );
