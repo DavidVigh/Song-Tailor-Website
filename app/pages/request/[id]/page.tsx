@@ -6,35 +6,49 @@ import { motion, Variants } from "framer-motion";
 import { 
   FaChevronLeft, FaChevronRight, FaClock, FaCheck, FaPlay, 
   FaCheckDouble, FaTrash, FaSave, FaCalendarAlt, FaTachometerAlt, 
-  FaLongArrowAltRight, FaYoutube, FaUser, FaAlignLeft, FaFire, FaMusic
+  FaLongArrowAltRight, FaYoutube, FaUser, FaAlignLeft, FaFire, FaMusic, FaPen, FaPlusCircle
 } from "react-icons/fa";
 import { getYouTubeThumbnail } from "@/app/lib/utils";
 import { useToast } from "@/app/context/ToastContext";
 import { Ticket } from "@/app/types"; 
 import ConfirmationModal from "@/app/components/ConfirmationModal";
-import { Link } from "lucide-react";
+import Link from "next/link";
+
+// 🕒 TIME AGO HELPER (Synced with TicketCard)
+function timeAgo(dateString: string) {
+  if (!dateString) return "";
+  const now = new Date();
+  const date = new Date(dateString);
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 52) return `${weeks}w ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
 
 const fadeInUp: Variants = {
   hidden: { opacity: 0, y: 20 },
-  visible: { 
-    opacity: 1, 
-    y: 0, 
-    transition: { duration: 0.5, ease: "easeOut" } 
-  }
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } }
 };
 
+// 🎨 COMPONENT: Montage Header (Vibrant & Naked)
 const MontageHeader = ({ images }: { images: string[] }) => {
   const displayImages = images.length < 5 ? [...images, ...images, ...images, ...images].slice(0, 10) : images;
   return (
     <div className="absolute top-0 left-0 w-full h-[300px] sm:h-[450px] z-0 overflow-hidden pointer-events-none select-none">
       <div className="absolute inset-0 flex w-full h-full">
         {displayImages.slice(0, 7).map((img, i) => (
-          <div key={i} className="relative h-full flex-1 overflow-hidden transform -skew-x-12 scale-150 sm:scale-125 border-r border-black/10 dark:border-white/5">
-            {/* 🛠️ VIBRANCY FIX: Increased brightness/contrast in dark mode */}
+          <div key={i} className="relative h-full flex-1 overflow-hidden transform -skew-x-12 scale-150 sm:scale-125 border-r border-black/5 dark:border-white/5">
             <img 
               src={img} 
-              alt="header-part" 
-              className="w-full h-full object-cover filter brightness-110 contrast-110 opacity-90 dark:opacity-60 dark:brightness-110 dark:contrast-110 dark:grayscale-[0.1] transition-all" 
+              className="w-full h-full object-cover filter brightness-110 contrast-105 opacity-90 dark:opacity-60 dark:brightness-110 dark:contrast-110 dark:grayscale-[0.1]" 
+              alt="bg-part"
             />
           </div>
         ))}
@@ -56,6 +70,7 @@ export default function RequestDetailPage() {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [formData, setFormData] = useState({ base_bpm: "", target_bpm: "", deadline: "" });
+  const [times, setTimes] = useState({ created: "", updated: "" });
 
   const links = ticket ? (Array.isArray(ticket.youtube_link) ? ticket.youtube_link : [ticket.youtube_link]) : [];
   const rawThumbnails = getYouTubeThumbnail(links);
@@ -76,6 +91,20 @@ export default function RequestDetailPage() {
   let realActiveIndex = totalSlides > 1 ? (currentIndex === 0 ? totalSlides - 1 : currentIndex === extendedThumbnails.length - 1 ? 0 : currentIndex - 1) : 0;
   const currentLink = links[realActiveIndex] || links[0] || "#";
   const currentTitle = videoTitles[currentLink] || "Watch on YouTube";
+
+  // Time-ago live updates
+  useEffect(() => {
+    if (!ticket) return;
+    const updateTimes = () => {
+      setTimes({
+        created: timeAgo(ticket.created_at),
+        updated: ticket.updated_at ? timeAgo(ticket.updated_at) : timeAgo(ticket.created_at),
+      });
+    };
+    updateTimes();
+    const interval = setInterval(updateTimes, 10000);
+    return () => clearInterval(interval);
+  }, [ticket]);
 
   useEffect(() => { if (id) fetchRequestData(); }, [id]);
   useEffect(() => { setCurrentIndex(thumbnails.length > 1 ? 1 : 0); }, [thumbnails.length]);
@@ -159,10 +188,10 @@ export default function RequestDetailPage() {
   const onTouchEnd = () => { if (!touchStartX.current || !touchEndX.current) return; const distance = touchStartX.current - touchEndX.current; if (distance > 50) nextSlide(); if (distance < -50) prevSlide(); };
 
   const getStatusBadge = (status: string) => {
-    const base = "px-3 py-1 rounded-full text-[10px] sm:text-xs font-bold flex items-center gap-2 backdrop-blur-md shadow-lg border";
+    const base = "px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-widest flex items-center gap-2 backdrop-blur-md shadow-lg border";
     switch (status) {
       case 'accepted': return <span className={`${base} bg-blue-600 text-white border-blue-600 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-500/50`}><FaCheck size={10} /> Queue</span>;
-      case 'in progress': return <span className={`${base} bg-yellow-500 text-white border-yellow-500 dark:bg-yellow-900/60 dark:text-yellow-300 dark:border-yellow-500/50`}><FaPlay size={8} /> Playing</span>;
+      case 'in progress': return <span className={`${base} bg-yellow-500 text-white border-yellow-500 dark:bg-yellow-900/60 dark:text-yellow-300 dark:border-yellow-500/50`}><FaPlay size={10} /> Playing</span>;
       case 'done': return <span className={`${base} bg-green-600 text-white border-green-600 dark:bg-green-900/60 dark:text-green-300 dark:border-green-500/50`}><FaCheckDouble size={10} /> Completed</span>;
       default: return <span className={`${base} bg-gray-600 text-white border-gray-600 dark:bg-[#333] dark:text-gray-400 dark:border-white/10`}><FaClock size={10} /> Pending</span>;
     }
@@ -208,7 +237,6 @@ export default function RequestDetailPage() {
                 />
               ))}
             </div>
-            {/* 🛠️ VIBRANCY FIX: Lighter dark gradient in dark mode (from-black/80 instead of from-black) */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent dark:from-[#0a0a0a]/90 dark:via-black/20" />
           </div>
 
@@ -216,12 +244,22 @@ export default function RequestDetailPage() {
             <div className="absolute top-6 right-6 sm:top-8 sm:right-8">{getStatusBadge(ticket.status)}</div>
             <div className="flex flex-col gap-2 sm:gap-4">
               <div className="flex gap-2">
-                <span className={`px-2 py-0.5 sm:px-3 sm:py-1 rounded text-[9px] sm:text-[10px] font-black uppercase tracking-widest border shadow-sm ${isChoreo ? "bg-purple-600 text-white border-purple-600 dark:bg-purple-900/60 dark:text-purple-300 dark:border-purple-500/50" : "bg-blue-600 text-white border-blue-600 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-500/50"}`}>{ticket.music_category || "CHOREO"}</span>
-                {ticket.hype && <span className="px-2 py-0.5 sm:px-3 sm:py-1 rounded text-[9px] sm:text-[10px] font-black uppercase flex items-center gap-1 shadow-sm border bg-red-600 text-white border-red-600 dark:bg-red-900/60 dark:text-red-300 dark:border-red-500/50"><FaFire size={10} /> Hype</span>}
+                <span className="px-3 py-1 rounded text-[11px] font-black uppercase tracking-widest border shadow-sm bg-purple-600 text-white border-purple-600 dark:bg-purple-900/60 dark:text-purple-300 dark:border-purple-500/50">{ticket.music_category || "CHOREO"}</span>
+                {ticket.hype && <span className="px-3 py-1 rounded text-[11px] font-black uppercase flex items-center gap-1 shadow-sm border bg-red-600 text-white border-red-600 dark:bg-red-900/60 dark:text-red-300 dark:border-red-500/50"><FaFire size={11} /> Hype</span>}
               </div>
               <h1 className="text-3xl sm:text-5xl md:text-7xl font-black text-white leading-tight tracking-tighter max-w-[85%] drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]">{ticket.title}</h1>
-              <div className="flex items-center gap-4 text-white/90 text-xs sm:text-sm font-bold drop-shadow-sm">
+              
+              {/* 🕒 TIME AGO METADATA */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-white/90 text-[10px] sm:text-xs font-bold drop-shadow-md">
                 <span className="flex items-center gap-1.5"><FaClock className="text-blue-400" /> {new Date(ticket.created_at).toLocaleDateString()}</span>
+                <span className="opacity-40">|</span>
+                <span className="flex items-center gap-1.5"><FaPlusCircle size={10} className="opacity-70" /> {times.created}</span>
+                {ticket.updated_at && (
+                  <>
+                    <span className="opacity-40">|</span>
+                    <span className="flex items-center gap-1.5 text-blue-200"><FaPen size={10} className="opacity-70" /> {times.updated}</span>
+                  </>
+                )}
               </div>
             </div>
 
@@ -258,8 +296,7 @@ export default function RequestDetailPage() {
             )}
           </div>
         </motion.div>
-        
-        {/* ... (rest of grid, technicals, and profile remains same as previous code) ... */}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 mt-8 sm:mt-12">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp} className="lg:col-span-2 bg-white dark:bg-[#151515] border border-gray-200 dark:border-[#252525] rounded-[1.5rem] sm:rounded-[2rem] p-6 sm:p-8 shadow-xl">
             <h3 className="text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2"><FaAlignLeft className="text-blue-500" /> Instructions</h3>
@@ -290,7 +327,6 @@ export default function RequestDetailPage() {
                 {isAdmin && <button onClick={saveChanges} disabled={saving} className="w-full bg-gray-900 dark:bg-white text-white dark:text-black py-3 rounded-xl font-bold flex items-center justify-center gap-2 text-[10px] sm:text-xs active:scale-95 transition-transform">{saving ? "..." : <><FaSave /> Update</>}</button>}
               </div>
             </div>
-
             {isAdmin ? (
               <Link href={`/pages/admin/user/${ticket.user_id}?from=ticket`} className="block bg-white dark:bg-[#151515] border border-gray-200 dark:border-[#252525] rounded-[1.5rem] sm:rounded-[2rem] p-5 sm:p-6 shadow-xl hover:border-blue-500/50 transition-colors group/user">
                 <div className="flex items-center gap-4">
