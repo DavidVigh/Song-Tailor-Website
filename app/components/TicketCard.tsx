@@ -46,7 +46,7 @@ interface TicketCardProps {
 }
 
 export default function TicketCard({ ticket }: TicketCardProps) {
-  const links = Array.isArray(ticket.youtube_link) ? ticket.youtube_link : [ticket.youtube_link];
+  const links = ticket.tracks?.map((t) => t.url).filter(Boolean) || [];
   const rawThumbnails = getYouTubeThumbnail(links);
   let thumbnails = (Array.isArray(rawThumbnails) ? rawThumbnails : [rawThumbnails])
     .filter((url): url is string => url !== null && url !== undefined)
@@ -54,7 +54,7 @@ export default function TicketCard({ ticket }: TicketCardProps) {
 
   const mainCover = thumbnails[0] || "";
   const hasMultipleImages = thumbnails.length > 1;
-  const isChoreo = (ticket.music_category || "").toLowerCase() === "choreo";
+  const isChoreo = (ticket.service_name || "").toLowerCase().includes("choreo");
 
   const [times, setTimes] = useState({ created: "", updated: "" });
 
@@ -109,15 +109,18 @@ export default function TicketCard({ ticket }: TicketCardProps) {
         
         {/* 1. Header Badges */}
         <div className="p-3 flex items-center justify-between">
-          <div className="flex gap-1.5">
+          <div className="flex gap-1.5 flex-wrap">
+            <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border shadow-sm ${ticket.genre === 'rnr' ? 'bg-orange-600 text-white border-orange-600 dark:bg-orange-900/60 dark:text-orange-300 dark:border-orange-500/50' : 'bg-purple-600 text-white border-purple-600 dark:bg-purple-900/60 dark:text-purple-300 dark:border-purple-500/50'}`}>
+              {ticket.genre === 'rnr' ? 'R&R' : 'FASHION'}
+            </span>
+            <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border shadow-sm ${isChoreo ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-500/50' : 'bg-blue-600 text-white border-blue-600 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-500/50'}`}>
+              {ticket.service_name || "N/A"}
+            </span>
             {ticket.hype && (
               <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase flex items-center gap-1 shadow-sm border bg-red-600 text-white border-red-600 dark:bg-red-900/60 dark:text-red-300 dark:border-red-500/50">
                 <FaFire size={10} /> Hype
               </span>
             )}
-            <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border shadow-sm ${isChoreo ? "bg-purple-600 text-white border-purple-600 dark:bg-purple-900/60 dark:text-purple-300 dark:border-purple-500/50" : "bg-blue-600 text-white border-blue-600 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-500/50"}`}>
-              {ticket.music_category || "CHOREO"}
-            </span>
           </div>
           <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border shadow-sm flex items-center gap-1.5 ${statusInfo.badgeClass}`}>
             {statusInfo.icon} {statusInfo.label}
@@ -125,7 +128,7 @@ export default function TicketCard({ ticket }: TicketCardProps) {
         </div>
 
         {/* 2. Body Content */}
-        <div className="p-4 flex items-center min-h-[145px]">
+        <div className="p-4 flex items-center flex-1">
           <div className="flex gap-4 items-center w-full">
             <div className="shrink-0 w-20 h-14 rounded-lg overflow-hidden shadow-lg border relative group/thumb bg-white border-white dark:bg-black dark:border-white/20">
               {thumbnails.length > 0 ? (
@@ -154,7 +157,7 @@ export default function TicketCard({ ticket }: TicketCardProps) {
               </Link>
               <div className="flex flex-wrap gap-2">
                 <div className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border shadow-lg backdrop-blur-md bg-black/50 text-white border-white/20 dark:bg-black/60 dark:text-gray-200 dark:border-white/10">
-                  <span className="font-bold opacity-80">BPM</span> {ticket.base_bpm || "?"} <FaLongArrowAltRight className="opacity-60" /> {ticket.target_bpm || "?"}
+                  <span className="font-bold opacity-80">BPM</span> {ticket.tracks?.[0]?.base_bpm || "?"} <FaLongArrowAltRight className="opacity-60" /> {ticket.target_bpm || ticket.tracks?.[0]?.target_bpm || "?"}
                 </div>
                 {ticket.deadline && (
                   <div className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border shadow-lg backdrop-blur-md bg-yellow-500/90 text-white border-yellow-400/50 dark:bg-yellow-600/40 dark:text-yellow-100 dark:border-yellow-500/30">
