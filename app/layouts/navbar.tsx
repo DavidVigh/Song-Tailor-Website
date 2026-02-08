@@ -70,18 +70,25 @@ export default function Navbar() {
     setProfile(null);
   };
 
+  // 🎯 DYNAMIC LOGO REDIRECT LOGIC
+  const getLogoHref = () => {
+    if (!user) return "/";
+    return profile?.role === 'admin' ? "/pages/admin" : "/pages/user/my-tickets";
+  };
+
   if (pathname === "/auth") return null;
 
   return (
     <nav className="sticky top-0 w-full h-16 z-50 flex items-center justify-between px-6 transition-colors duration-300
-      /* ⚪ Light Mode: Clean White with Blur */
       bg-white/80 backdrop-blur-md border-b border-gray-200 
-      /* ⚫ Dark Mode: Dark Gray/Black */
       dark:bg-[#121212]/95 dark:border-white/5"
     >
       
-      {/* LOGO */}
-      <Link href="/" className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-500 bg-clip-text text-transparent hover:opacity-80 transition-opacity">
+      {/* LOGO - Now with Dynamic Href */}
+      <Link 
+        href={getLogoHref()} 
+        className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-500 bg-clip-text text-transparent hover:opacity-80 transition-opacity"
+      >
         SONG TAILOR
       </Link>
 
@@ -95,7 +102,7 @@ export default function Navbar() {
            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-[#333] animate-pulse"></div>
         ) : user ? (
           <>
-            {/* DESKTOP BUTTONS (Visible on md+) */}
+            {/* DESKTOP BUTTONS */}
             {profile?.role === 'admin' && (
               <Link 
                 href="/pages/admin" 
@@ -135,7 +142,6 @@ export default function Navbar() {
 
               {isDropdownOpen && (
                 <div className="absolute right-0 top-14 w-64 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200
-                  /* Dropdown Background & Border */
                   bg-white border border-gray-200 
                   dark:bg-[#1e1e1e] dark:border-[#333]"
                 >
@@ -147,7 +153,7 @@ export default function Navbar() {
                     <p className="text-xs font-bold truncate text-gray-400">{user?.email}</p>
                   </div>
 
-                  {/* 🛠️ GROUP 1: PERSONAL STUFF */}
+                  {/* GROUP 1: PERSONAL STUFF */}
                   <div className="p-2 space-y-1">
                     <Link 
                       href="/pages/user" 
@@ -170,10 +176,10 @@ export default function Navbar() {
                     </Link>
                   </div>
 
-                  {/* ➖ SEPARATOR */}
+                  {/* SEPARATOR */}
                   <div className="h-px mx-2 bg-gray-200 dark:bg-[#333]"></div>
 
-                  {/* 🛠️ GROUP 2: ACTIONS */}
+                  {/* GROUP 2: ACTIONS */}
                   <div className="p-2 space-y-1">
                     {profile?.role === 'admin' && (
                         <Link 
