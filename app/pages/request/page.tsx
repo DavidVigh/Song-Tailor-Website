@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import {
   FaChevronLeft,
@@ -20,18 +20,32 @@ import {
   FaPencilAlt,
   FaHistory,
   FaCalendarAlt,
+  FaExclamationCircle,
+  FaCheck,
 } from "react-icons/fa";
 import { useRouter } from "next/navigation";
 import { getYouTubeThumbnail } from "@/app/lib/utils";
-import { supabase } from "@/lib/supabase"; // Ensure this path is correct for your client
+import { supabase } from "@/lib/supabase";
+
+// --- CONSTANTS ---
+const MIN_BPM = 40;
+const MAX_BPM = 250;
 
 // --- TYPES ---
 interface Track {
   url: string;
   title: string;
-  base_bpm: number | null;
-  target_bpm: number | null;
-  isEditing?: boolean; // For UI state only
+  baseBpm: string;
+  targetBpm: string;
+  isEditing?: boolean;
+}
+
+interface FormErrors {
+  title?: string;
+  service?: string;
+  deadline?: string;
+  tracks?: string;
+  bpm?: string;
 }
 
 // --- ANIMATION ---
@@ -68,7 +82,7 @@ const SelectionCard = ({
   disabled = false,
 }: {
   title: string;
-  icon: any;
+  icon: React.ReactNode;
   active: boolean;
   onClick: () => void;
   description?: string;
@@ -84,7 +98,7 @@ const SelectionCard = ({
           ? "bg-blue-600 border-blue-500 shadow-xl shadow-blue-900/20 scale-[1.02]"
           : "bg-white dark:bg-[#111111] border-gray-200 dark:border-white/5 hover:border-blue-500/30"
       }
-      ${disabled ? "cursor-default opacity-90" : "cursor-pointer"}`}
+      ${disabled ? "cursor-default opacity-90 grayscale pointer-events-none" : "cursor-pointer"}`}
   >
     <div className="flex justify-between items-start mb-4">
       <div
@@ -132,11 +146,21 @@ export default function NewRequestPage() {
   const [projectTargetBpm, setProjectTargetBpm] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // --- VALIDATION & LOCK STATE ---
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [urlErrors, setUrlErrors] = useState<{ [key: number]: string }>({});
+  const interactionLock = useRef(false);
+
   // --- CLASS MUSIC & TRACK STATE ---
   const [classMusicQty, setClassMusicQty] = useState(1);
-  const [ytLinks, setYtLinks] = useState<any[]>([
+  const [ytLinks, setYtLinks] = useState<Track[]>([
     { url: "", title: "", isEditing: false, baseBpm: "", targetBpm: "" },
   ]);
+
+  const isAnyEditing = useMemo(
+    () => ytLinks.some((t) => t.isEditing),
+    [ytLinks],
+  );
 
   const isCustomTier = useMemo(
     () => service === "Full Custom" || service === "Custom Beat",
@@ -144,39 +168,39 @@ export default function NewRequestPage() {
   );
   const isClassMusic = useMemo(() => service === "Class Music", [service]);
 
-  // --- LOGIC: SCROLL TO TOP ---
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [step]);
 
-  // --- LOGIC: TRACK GENERATION (CLASS MUSIC) ---
   useEffect(() => {
     if (isClassMusic) {
-      const currentCount = ytLinks.length;
-      if (classMusicQty > currentCount) {
-        const diff = classMusicQty - currentCount;
-        const newTracks = Array(diff)
-          .fill(null)
-          .map(() => ({
-            url: "",
-            title: "",
-            isEditing: false,
-            baseBpm: "",
-            targetBpm: "",
-          }));
-        setYtLinks([...ytLinks, ...newTracks]);
-      } else if (classMusicQty < currentCount) {
-        setYtLinks(ytLinks.slice(0, classMusicQty));
-      }
+      setYtLinks((prevLinks) => {
+        const currentCount = prevLinks.length;
+        if (classMusicQty > currentCount) {
+          const diff = classMusicQty - currentCount;
+          const newTracks = Array(diff)
+            .fill(null)
+            .map(() => ({
+              url: "",
+              title: "",
+              isEditing: false,
+              baseBpm: "",
+              targetBpm: "",
+            }));
+          return [...prevLinks, ...newTracks];
+        } else if (classMusicQty < currentCount) {
+          return prevLinks.slice(0, classMusicQty);
+        }
+        return prevLinks;
+      });
     }
   }, [classMusicQty, isClassMusic]);
 
-  // --- LOGIC: AUTO-TICK CUSTOM UPGRADES ---
+  // --- CHANGED: Removed "fast" from the default upgrades list ---
   useEffect(() => {
-    if (isCustomTier) setUpgrades(["sfx", "intro", "fillers", "fast"]);
+    if (isCustomTier) setUpgrades(["sfx", "intro", "fillers"]);
   }, [isCustomTier]);
 
-  // --- HANDLERS: RESETS ---
   const handleGenreSelection = (selectedGenre: "fashion" | "rocknroll") => {
     if (genre !== selectedGenre) {
       setService(null);
@@ -188,6 +212,8 @@ export default function NewRequestPage() {
         { url: "", title: "", isEditing: false, baseBpm: "", targetBpm: "" },
       ]);
       setClassMusicQty(1);
+      setErrors({});
+      setUrlErrors({});
     }
     setGenre(selectedGenre);
     setStep(2);
@@ -203,12 +229,13 @@ export default function NewRequestPage() {
         { url: "", title: "", isEditing: false, baseBpm: "", targetBpm: "" },
       ]);
       setClassMusicQty(1);
+      setErrors({});
+      setUrlErrors({});
     }
     setService(selectedService);
     setStep(3);
   };
 
-  // --- HANDLERS: DATA & SUBMISSION ---
   const totalPrice = useMemo(() => {
     let total = 0;
     if (isClassMusic) {
@@ -244,58 +271,189 @@ export default function NewRequestPage() {
     genre,
     service,
     upgrades,
-    ytLinks,
+    ytLinks.length,
     isCustomTier,
     isClassMusic,
     classMusicQty,
   ]);
 
+  const validateBpmInput = (val: string): string => {
+    if (val === "") return "";
+    const num = parseInt(val);
+    if (isNaN(num)) return "";
+    if (num < 0) return "";
+    return val;
+  };
+
+  const isValidYoutubeUrl = (url: string) => {
+    if (!url) return true;
+    return /^(https?:\/\/)?(www\.|music\.)?(youtube\.com|youtu\.be)\/.+$/.test(
+      url,
+    );
+  };
+
   const fetchVideoTitle = async (index: number, url: string) => {
-    if (!url || (!url.includes("youtube.com") && !url.includes("youtu.be")))
-      return;
+    if (!url || !isValidYoutubeUrl(url)) return;
     try {
       const res = await fetch(
         `https://www.youtube.com/oembed?url=${url}&format=json`,
       );
-      const data = await res.json();
-      const next = [...ytLinks];
-      next[index].title = data.title;
-      setYtLinks(next);
+      if (res.ok) {
+        const data = await res.json();
+        setYtLinks((prev) => {
+          const next = [...prev];
+          next[index] = { ...next[index], title: data.title };
+          return next;
+        });
+      }
     } catch (e) {
       console.error(e);
     }
   };
 
-  const updateTrackData = (index: number, key: string, val: string) => {
-    const next = [...ytLinks];
-    (next[index] as any)[key] = val;
-    setYtLinks(next);
+  const updateTrackData = (
+    index: number,
+    key: keyof Track,
+    val: string | boolean,
+  ) => {
+    if ((key === "baseBpm" || key === "targetBpm") && typeof val === "string") {
+      val = validateBpmInput(val);
+    }
+
+    if (key === "url") {
+      setUrlErrors((prev) => {
+        const next = { ...prev };
+        delete next[index];
+        return next;
+      });
+    }
+
+    setYtLinks((prev) => {
+      const next = [...prev];
+      (next[index] as any)[key] = val;
+      return next;
+    });
+
+    if (errors.tracks) setErrors((prev) => ({ ...prev, tracks: undefined }));
   };
 
-  const toggleEdit = (index: number, val: boolean) => {
-    const next = [...ytLinks];
-    next[index].isEditing = val;
-    if (!val) fetchVideoTitle(index, next[index].url);
-    setYtLinks(next);
+  const toggleEdit = (index: number, shouldOpen: boolean) => {
+    if (interactionLock.current) return;
+
+    if (shouldOpen) {
+      if (isAnyEditing) return;
+
+      setYtLinks((prev) => {
+        const next = [...prev];
+        next.forEach((t) => (t.isEditing = false));
+        next[index] = { ...next[index], isEditing: true };
+        return next;
+      });
+      return;
+    }
+
+    const url = ytLinks[index].url;
+
+    if (url && !isValidYoutubeUrl(url)) {
+      setUrlErrors((prev) => ({ ...prev, [index]: "Invalid YouTube link" }));
+      return;
+    }
+
+    if (url) {
+      fetchVideoTitle(index, url);
+    }
+
+    setYtLinks((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], isEditing: false };
+      return next;
+    });
+
+    interactionLock.current = true;
+    setTimeout(() => {
+      interactionLock.current = false;
+    }, 200);
   };
 
   const handleContainerBlur = (e: React.FocusEvent, index: number) => {
-    const nextFocusedElement = e.relatedTarget as Node;
-    if (e.currentTarget.contains(nextFocusedElement)) return;
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     toggleEdit(index, false);
   };
 
   const removeYtLink = (index: number) => {
-    if (isClassMusic) setClassMusicQty(Math.max(1, classMusicQty - 1));
-    else setYtLinks(ytLinks.filter((_, i) => i !== index));
+    if (interactionLock.current) return;
+
+    if (isClassMusic) {
+      setClassMusicQty(Math.max(1, classMusicQty - 1));
+    } else {
+      setYtLinks((prev) => prev.filter((_, i) => i !== index));
+      setUrlErrors((prev) => {
+        const next = { ...prev };
+        delete next[index];
+        return next;
+      });
+    }
   };
 
   const addYtLink = () => {
+    if (interactionLock.current) return;
+    if (isAnyEditing) return;
+
     if (ytLinks.length < 5)
-      setYtLinks([
-        ...ytLinks,
-        { url: "", title: "", isEditing: false, baseBpm: "", targetBpm: "" },
+      setYtLinks((prev) => [
+        ...prev,
+        { url: "", title: "", isEditing: true, baseBpm: "", targetBpm: "" },
       ]);
+  };
+
+  const validateForm = () => {
+    const newErrors: FormErrors = {};
+    let isValid = true;
+
+    if (step === 4) {
+      if (!title.trim()) {
+        newErrors.title = "Project title is required";
+        isValid = false;
+      }
+
+      if (!isClassMusic && ytLinks.every((t) => !t.url.trim())) {
+        newErrors.tracks = "Please add at least one YouTube link";
+        isValid = false;
+      }
+
+      if (ytLinks.some((t) => t.url && !isValidYoutubeUrl(t.url))) {
+        newErrors.tracks = "Please fix invalid YouTube links";
+        isValid = false;
+      }
+
+      const invalidBpm = ytLinks.some((t) => {
+        const base = t.baseBpm ? parseInt(t.baseBpm) : null;
+        const target = t.targetBpm ? parseInt(t.targetBpm) : null;
+        return (
+          (base !== null && (base < MIN_BPM || base > MAX_BPM)) ||
+          (target !== null && (target < MIN_BPM || target > MAX_BPM))
+        );
+      });
+
+      if (invalidBpm) {
+        newErrors.bpm = `BPM must be between ${MIN_BPM} and ${MAX_BPM}`;
+        isValid = false;
+      }
+    }
+
+    setErrors(newErrors);
+    return isValid;
+  };
+
+  const handleNextStep = () => {
+    setErrors({});
+    if (step < 4) {
+      setStep(step + 1);
+    } else {
+      if (validateForm()) {
+        handleSubmit();
+      }
+    }
   };
 
   const handleSubmit = async () => {
@@ -316,7 +474,7 @@ export default function NewRequestPage() {
       const { error } = await supabase.from("song_requests").insert([
         {
           title: title || "Untitled Project",
-          genre: genre === "rocknroll" ? "rnr" : "fashion", // ENUM match
+          genre: genre === "rocknroll" ? "rnr" : "fashion",
           service_name: service,
           upgrades,
           total_price: totalPrice,
@@ -327,7 +485,6 @@ export default function NewRequestPage() {
           tracks: formattedTracks,
           user_id: user.id,
           status: "new",
-          // 'position' is handled by the DB default automatically now
         },
       ]);
 
@@ -343,6 +500,7 @@ export default function NewRequestPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a] pb-44">
+      {/* ... (Previous Steps UI Code remains same until Step 4) ... */}
       <div className="max-w-4xl mx-auto px-6 pt-12 sm:pt-20">
         <button
           onClick={() => (step > 1 ? setStep(step - 1) : router.back())}
@@ -374,7 +532,6 @@ export default function NewRequestPage() {
         </div>
 
         <AnimatePresence mode="wait">
-          {/* STEP 1: GENRE */}
           {step === 1 && (
             <motion.div
               key="step1"
@@ -401,7 +558,6 @@ export default function NewRequestPage() {
             </motion.div>
           )}
 
-          {/* STEP 2: SERVICE */}
           {step === 2 && (
             <motion.div
               key="step2"
@@ -469,7 +625,6 @@ export default function NewRequestPage() {
             </motion.div>
           )}
 
-          {/* STEP 3: TECHNICALS OR QUANTITY */}
           {step === 3 && (
             <motion.div
               key="step3"
@@ -555,17 +710,6 @@ export default function NewRequestPage() {
                       ))}
                     </div>
                   </div>
-                  <div className="bg-gray-100 dark:bg-white/5 p-8 rounded-[3rem] border border-dashed border-gray-300 dark:border-white/10 text-center group cursor-pointer hover:border-blue-500/50 transition-all">
-                    <div className="w-14 h-14 rounded-2xl bg-white dark:bg-white/5 mx-auto flex items-center justify-center text-blue-500 mb-5 group-hover:scale-110 transition-transform">
-                      <FaHistory size={20} />
-                    </div>
-                    <h4 className="text-base font-black text-gray-900 dark:text-white uppercase tracking-widest mb-1">
-                      Select from Done Songs
-                    </h4>
-                    <p className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
-                      Reuse previous tracks
-                    </p>
-                  </div>
                 </div>
               ) : (
                 <>
@@ -590,7 +734,9 @@ export default function NewRequestPage() {
                         type="number"
                         disabled={!hasProjectBpm && genre === "fashion"}
                         value={projectTargetBpm}
-                        onChange={(e) => setProjectTargetBpm(e.target.value)}
+                        onChange={(e) =>
+                          setProjectTargetBpm(validateBpmInput(e.target.value))
+                        }
                         placeholder="Target BPM"
                         className="w-full bg-gray-50 dark:bg-black/20 p-4 rounded-xl outline-none border focus:border-blue-500/50 text-sm font-bold"
                       />
@@ -664,12 +810,14 @@ export default function NewRequestPage() {
                       }
                       description="Produce 8-counts from scratch."
                     />
+
+                    {/* --- CHANGED: Enabled (disabled={false}) to allow manual selection even on Premium --- */}
                     <SelectionCard
                       title="Fast Delivery"
                       priceLabel={isCustomTier ? "Included" : "+5.000 FT"}
                       icon={<FaBolt />}
                       active={upgrades.includes("fast")}
-                      disabled={isCustomTier}
+                      disabled={false}
                       onClick={() =>
                         setUpgrades((u) =>
                           u.includes("fast")
@@ -680,14 +828,14 @@ export default function NewRequestPage() {
                       description="Priority 1-week turnaround."
                     />
                   </div>
+                  <button
+                    onClick={() => handleNextStep()}
+                    className="w-full py-6 rounded-[2.5rem] bg-gray-900 dark:bg-white text-white dark:text-black font-black uppercase tracking-widest text-xs sm:text-sm active:scale-95 transition-all shadow-xl"
+                  >
+                    Continue to media
+                  </button>
                 </>
               )}
-              <button
-                onClick={() => setStep(4)}
-                className="w-full py-6 rounded-[2.5rem] bg-gray-900 dark:bg-white text-white dark:text-black font-black uppercase tracking-widest text-xs sm:text-sm active:scale-95 transition-all shadow-xl"
-              >
-                Continue to media
-              </button>
             </motion.div>
           )}
 
@@ -703,15 +851,24 @@ export default function NewRequestPage() {
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-4">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-4">
-                    Project Title
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-4 flex items-center gap-2">
+                    Project Title{" "}
+                    {errors.title && (
+                      <span className="text-red-500 flex items-center gap-1">
+                        <FaExclamationCircle /> Required
+                      </span>
+                    )}
                   </label>
                   <input
                     type="text"
                     value={title}
-                    onChange={(e) => setTitle(e.target.value)}
+                    onChange={(e) => {
+                      setTitle(e.target.value);
+                      if (errors.title)
+                        setErrors({ ...errors, title: undefined });
+                    }}
                     placeholder="Mix Title"
-                    className="w-full p-6 rounded-[2.5rem] bg-white dark:bg-[#111111] border border-gray-200 dark:border-white/5 outline-none text-gray-900 dark:text-white font-bold transition-all shadow-sm"
+                    className={`w-full p-6 rounded-[2.5rem] bg-white dark:bg-[#111111] border outline-none text-gray-900 dark:text-white font-bold transition-all shadow-sm ${errors.title ? "border-red-500 bg-red-50 dark:bg-red-900/10" : "border-gray-200 dark:border-white/5"}`}
                   />
                 </div>
                 <div className="space-y-4 relative group">
@@ -734,8 +891,18 @@ export default function NewRequestPage() {
 
               <div className="space-y-6">
                 <div className="flex justify-between items-center ml-4">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 font-black tracking-[0.2em]">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 font-black tracking-[0.2em] flex items-center gap-2">
                     YouTube Tracks
+                    {errors.tracks && (
+                      <span className="text-red-500 text-[8px] tracking-normal capitalize flex items-center gap-1">
+                        <FaExclamationCircle /> {errors.tracks}
+                      </span>
+                    )}
+                    {errors.bpm && (
+                      <span className="text-red-500 text-[8px] tracking-normal capitalize flex items-center gap-1">
+                        <FaExclamationCircle /> {errors.bpm}
+                      </span>
+                    )}
                   </label>
                   <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest font-black">
                     {ytLinks.length} Tracks Selected
@@ -744,12 +911,25 @@ export default function NewRequestPage() {
                 <div className="space-y-6">
                   {ytLinks.map((track, idx) => {
                     const rawThumb = getYouTubeThumbnail([track.url]);
-                    const thumb = Array.isArray(rawThumb) ? rawThumb[0] : rawThumb;
+                    const thumb = Array.isArray(rawThumb)
+                      ? rawThumb[0]
+                      : rawThumb;
+
+                    const trackBpmError =
+                      (track.baseBpm &&
+                        (parseInt(track.baseBpm) < MIN_BPM ||
+                          parseInt(track.baseBpm) > MAX_BPM)) ||
+                      (track.targetBpm &&
+                        (parseInt(track.targetBpm) < MIN_BPM ||
+                          parseInt(track.targetBpm) > MAX_BPM));
+
+                    const trackUrlError = urlErrors[idx];
+
                     return (
                       <div
                         key={idx}
                         onBlur={(e) => handleContainerBlur(e, idx)}
-                        className="bg-white dark:bg-[#111111] p-4 sm:p-5 rounded-[2.5rem] border border-gray-100 dark:border-white/5 shadow-sm transition-all hover:border-blue-500/20 group"
+                        className={`bg-white dark:bg-[#111111] p-4 sm:p-5 rounded-[2.5rem] border shadow-sm transition-all group ${trackBpmError || trackUrlError ? "border-red-500 shadow-red-500/10" : "border-gray-100 dark:border-white/5 hover:border-blue-500/20"}`}
                       >
                         <div className="flex flex-col gap-4">
                           <div className="flex items-center justify-between gap-3 sm:gap-4">
@@ -769,9 +949,12 @@ export default function NewRequestPage() {
                               </div>
                               <div className="flex-1 relative min-w-0">
                                 {!track.isEditing ? (
-                                  <div
+                                  // LOCKED STATE (Button disabled if ANY other track is editing)
+                                  <button
+                                    disabled={isAnyEditing && !track.isEditing}
                                     onClick={() => toggleEdit(idx, true)}
-                                    className="w-full flex items-center justify-between bg-blue-50 dark:bg-blue-900/10 py-2.5 px-4 rounded-xl cursor-pointer group/title"
+                                    className={`w-full flex items-center justify-between py-2.5 px-4 rounded-xl group/title transition-all
+                                        ${isAnyEditing && !track.isEditing ? "bg-gray-100 dark:bg-white/5 opacity-50 cursor-not-allowed pointer-events-none" : "bg-blue-50 dark:bg-blue-900/10 cursor-pointer"}`}
                                   >
                                     <div className="flex items-center gap-2 truncate pr-24">
                                       <span className="text-[11px] sm:text-xs font-black text-blue-600 dark:text-blue-400 uppercase tracking-tight truncate">
@@ -791,11 +974,13 @@ export default function NewRequestPage() {
                                           ? "+2.000 FT"
                                           : "+3.500 FT"}
                                     </span>
-                                  </div>
+                                  </button>
                                 ) : (
+                                  // EDIT MODE
                                   <div className="relative">
                                     <input
                                       type="text"
+                                      autoFocus
                                       value={track.url}
                                       onChange={(e) =>
                                         updateTrackData(
@@ -804,26 +989,32 @@ export default function NewRequestPage() {
                                           e.target.value,
                                         )
                                       }
-                                      placeholder="Paste URL..."
-                                      className="w-full bg-gray-50 dark:bg-black/20 py-2.5 pl-4 pr-24 rounded-xl border focus:border-blue-500/30 outline-none font-bold text-[10px] sm:text-xs"
+                                      placeholder="Paste YouTube URL..."
+                                      className={`w-full bg-gray-50 dark:bg-black/20 py-2.5 pl-4 pr-10 rounded-xl border outline-none font-bold text-[10px] sm:text-xs ${trackUrlError ? "border-red-500 text-red-500" : "focus:border-blue-500/30"}`}
                                     />
-                                    <span
-                                      className={`absolute right-2 top-1/2 -translate-y-1/2 text-[8px] font-black uppercase px-2 py-1 rounded border ${idx < 3 || isCustomTier || isClassMusic ? "text-green-500 border-green-500/30 bg-green-500/5" : "text-blue-500 border-blue-500/30 bg-blue-500/5"}`}
+                                    {/* Error Message Below Input */}
+                                    {trackUrlError && (
+                                      <div className="absolute top-full left-0 mt-1 text-[9px] font-bold text-red-500 flex items-center gap-1">
+                                        <FaExclamationCircle size={10} />{" "}
+                                        {trackUrlError}
+                                      </div>
+                                    )}
+                                    {/* Manual Save Icon */}
+                                    <button
+                                      onClick={() => toggleEdit(idx, false)}
+                                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-500"
                                     >
-                                      {isCustomTier || isClassMusic || idx < 3
-                                        ? "Included"
-                                        : idx === 3
-                                          ? "+2.000 FT"
-                                          : "+3.500 FT"}
-                                    </span>
+                                      <FaCheck />
+                                    </button>
                                   </div>
                                 )}
                               </div>
                             </div>
                             {!isClassMusic && ytLinks.length > 1 && (
                               <button
+                                disabled={isAnyEditing}
                                 onClick={() => removeYtLink(idx)}
-                                className="p-2.5 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 transition-all hover:text-white flex-shrink-0"
+                                className={`p-2.5 rounded-xl bg-red-500/10 text-red-500 transition-all flex-shrink-0 ${isAnyEditing ? "opacity-30 cursor-not-allowed pointer-events-none" : "hover:bg-red-500 hover:text-white"}`}
                               >
                                 <FaTrash size={12} />
                               </button>
@@ -873,6 +1064,7 @@ export default function NewRequestPage() {
                               </div>
                             </div>
                           )}
+                          {/* Locked BPM Display */}
                           {isClassMusic &&
                             !track.isEditing &&
                             (track.baseBpm || track.targetBpm) && (
@@ -906,7 +1098,9 @@ export default function NewRequestPage() {
                   {!isClassMusic && ytLinks.length < 5 && (
                     <button
                       onClick={addYtLink}
-                      className="w-full p-5 rounded-[2.5rem] border border-dashed border-gray-300 dark:border-white/10 flex items-center justify-center gap-2 text-gray-400 hover:text-blue-500 transition-all font-black text-[10px] uppercase tracking-widest"
+                      disabled={isAnyEditing} // PROTECT: Disable Add if editing
+                      className={`w-full p-5 rounded-[2.5rem] border border-dashed border-gray-300 dark:border-white/10 flex items-center justify-center gap-2 font-black text-[10px] uppercase tracking-widest transition-all
+                        ${isAnyEditing ? "text-gray-600 dark:text-gray-600 cursor-not-allowed opacity-50 pointer-events-none" : "text-gray-400 hover:text-blue-500"}`}
                     >
                       <FaPlusCircle /> ADD ANOTHER TRACK
                     </button>
@@ -946,7 +1140,7 @@ export default function NewRequestPage() {
           </div>
           <button
             disabled={!service || isSubmitting}
-            onClick={() => (step < 4 ? setStep(step + 1) : handleSubmit())}
+            onClick={() => handleNextStep()}
             className={`flex items-center gap-2 px-6 sm:px-8 py-3.5 sm:py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all bg-blue-600 text-white hover:bg-blue-500 shadow-xl ${isSubmitting ? "opacity-50" : "active:scale-95"}`}
           >
             {isSubmitting
