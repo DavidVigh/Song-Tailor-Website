@@ -257,7 +257,7 @@ export default function AdminPage() {
   if (!isAdmin) return null;
 
   return (
-    <div className="min-h-screen p-4 md:p-8 max-w-[1600px] mx-auto relative">
+    <div className="min-h-screen p-4 md:p-8 max-w-400 mx-auto relative">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
         <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-3 text-gray-900 dark:text-white">
           <span className="bg-red-600 text-xs px-2 py-1 rounded text-white font-bold tracking-wider">ADMIN</span> Board
@@ -296,7 +296,7 @@ export default function AdminPage() {
                     <div
                       ref={provided.innerRef}
                       {...provided.droppableProps}
-                      className={`flex-1 rounded-2xl p-2 transition-colors min-h-[500px] ${
+                      className={`flex-1 rounded-2xl p-2 transition-colors min-h-125 ${
                         snapshot.isDraggingOver ? "bg-gray-100/50 border-2 border-dashed border-gray-300 dark:bg-[#252525]/30 dark:border-[#444]" : ""
                       }`}
                     >

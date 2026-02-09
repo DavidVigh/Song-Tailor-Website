@@ -18,7 +18,7 @@ interface AdminTicketCardProps {
 
 // 🖼️ PLACEHOLDER COMPONENT
 const PlaceholderThumb = () => (
-  <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-[#1a1a1a] dark:to-[#0a0a0a] flex flex-col items-center justify-center gap-2 border border-white/5 shadow-inner">
+  <div className="w-full h-full bg-linear-to-br from-gray-100 to-gray-200 dark:from-[#1a1a1a] dark:to-[#0a0a0a] flex flex-col items-center justify-center gap-2 border border-white/5 shadow-inner">
     <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-blue-500/30">
       <FaMusic size={24} />
     </div>
@@ -54,7 +54,7 @@ export default function AdminTicketCard({
       />
 
       {/* GRADIENT OVERLAY FOR LEGIBILITY */}
-      <div className="absolute inset-0 z-[1] bg-gradient-to-b from-white/10 via-white/80 to-white dark:from-black/10 dark:via-black/60 dark:to-[#111111] pointer-events-none" />
+      <div className="absolute inset-0 z-1 bg-linear-to-b from-white/10 via-white/80 to-white dark:from-black/10 dark:via-black/60 dark:to-[#111111] pointer-events-none" />
 
       <div className="relative z-10 flex flex-col h-full flex-1">
         
@@ -146,7 +146,7 @@ export default function AdminTicketCard({
             <div className="space-y-1 text-right">
               <span className="text-[7px] font-black text-gray-400 uppercase tracking-widest block">Total Price</span>
               <div className="text-xs font-black text-gray-900 dark:text-white">
-                {ticket.total_price?.toLocaleString()} <span className="text-[8px] text-blue-500 font-black font-black uppercase tracking-[0.2em]">FT</span>
+                {ticket.total_price?.toLocaleString()} <span className="text-[8px] text-blue-500 font-black uppercase tracking-[0.2em]">FT</span>
               </div>
             </div>
           </div>
@@ -169,7 +169,7 @@ export default function AdminTicketCard({
                 e.stopPropagation();
                 advanceStatus(ticket);
               }}
-              className="w-full mt-auto flex items-center justify-center gap-3 py-4 rounded-[1.5rem] bg-gray-900 dark:bg-white text-white dark:text-black font-black uppercase text-[9px] tracking-widest hover:bg-blue-600 hover:text-white transition-all duration-300 active:scale-95 shadow-xl"
+              className="w-full mt-auto flex items-center justify-center gap-3 py-4 rounded-3xl bg-gray-900 dark:bg-white text-white dark:text-black font-black uppercase text-[9px] tracking-widest hover:bg-blue-600 hover:text-white transition-all duration-300 active:scale-95 shadow-xl"
             >
               {colId === 'new' ? 'Move to Queue' : colId === 'accepted' ? 'Start Production' : 'Mark as Done'} 
               <FaArrowRight size={10} />
