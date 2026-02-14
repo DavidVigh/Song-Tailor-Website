@@ -1,6 +1,7 @@
 "use client";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { getYouTubeThumbnail } from "@/app/lib/utils";
+import { getYouTubeThumbnail, timeAgo } from "@/app/lib/utils";
 import { Ticket } from "@/app/types";
 import {
   FaTrash,
@@ -10,6 +11,9 @@ import {
   FaMusic,
   FaFire,
   FaCheckCircle,
+  FaUser,
+  FaPlusCircle,
+  FaPen,
 } from "react-icons/fa";
 import { CarouselThumbnail, BackgroundCarousel } from "./TicketCarousels";
 
@@ -18,7 +22,7 @@ interface AdminTicketCardProps {
   colId: string;
   confirmDelete: (id: number) => void;
   advanceStatus: (ticket: Ticket) => void;
-  showStatusBadge?: boolean; // Toggles the badge for Categorized View
+  showStatusBadge?: boolean;
 }
 
 const PlaceholderThumb = () => (
@@ -37,9 +41,11 @@ export default function AdminTicketCard({
   colId,
   confirmDelete,
   advanceStatus,
-  showStatusBadge = false, // Default hidden to keep main board clean
+  showStatusBadge = false,
 }: AdminTicketCardProps) {
   const router = useRouter();
+  const [currentIndex, setCurrentIndex] = useState(0);
+
   const trackUrls = ticket.tracks?.map((t: any) => t.url).filter(Boolean) || [];
   const rawThumbnails = getYouTubeThumbnail(trackUrls);
   const thumbnails: string[] = rawThumbnails
@@ -59,7 +65,6 @@ export default function AdminTicketCard({
 
   const cal = getCalendarDate(ticket.deadline);
 
-  // 🛠️ Status Color & Label Configuration
   const statusConfig: Record<string, { label: string; color: string }> = {
     new: {
       label: "NEW",
@@ -71,7 +76,7 @@ export default function AdminTicketCard({
     },
     "in progress": {
       label: "PROGRESS",
-      color: "text-yellow-500 border-yellow-500/30 bg-yellow-500/5",
+      color: "text-yellow-500 border-yellow-400/30 bg-yellow-500/5",
     },
     done: {
       label: "DONE",
@@ -83,7 +88,7 @@ export default function AdminTicketCard({
   return (
     <div
       onClick={() => router.push(`/pages/request/${ticket.id}`)}
-      className="group relative overflow-hidden bg-white dark:bg-[#111111] border border-gray-100 dark:border-white/5 rounded-[2rem] p-4 shadow-sm hover:shadow-2xl transition-all duration-500 h-full min-h-[320px] flex flex-col cursor-pointer"
+      className="group relative overflow-hidden bg-white dark:bg-[#111111] border border-gray-200 dark:border-white/5 rounded-[2rem] p-4 shadow-sm hover:shadow-2xl transition-all duration-500 h-full min-h-[420px] flex flex-col cursor-pointer"
     >
       {thumbnails.length > 0 && (
         <BackgroundCarousel
@@ -99,7 +104,8 @@ export default function AdminTicketCard({
         <div
           onClick={(e) => {
             e.stopPropagation();
-            if (trackUrls.length > 0) window.open(trackUrls[0], "_blank");
+            if (trackUrls.length > 0)
+              window.open(trackUrls[currentIndex], "_blank");
           }}
           className="w-full h-40 rounded-2xl overflow-hidden border-2 border-transparent group-hover:border-blue-500/30 transition-all shadow-xl mb-3 bg-gray-100 dark:bg-black/20 cursor-alias z-20"
         >
@@ -109,13 +115,14 @@ export default function AdminTicketCard({
               links={trackUrls}
               showIndicators={true}
               slideDuration={4000}
+              onIndexChange={setCurrentIndex}
             />
           ) : (
             <PlaceholderThumb />
           )}
         </div>
 
-        <div className="space-y-2.5 flex-1 flex flex-col">
+        <div className="space-y-4 flex-1 flex flex-col">
           {/* BADGES */}
           <div className="flex items-center flex-nowrap gap-1 overflow-hidden">
             <span
@@ -131,8 +138,6 @@ export default function AdminTicketCard({
                 <FaFire size={8} className="shrink-0" /> HYPE
               </span>
             )}
-
-            {/* 🔥 STATUS BADGE - Pushed to the right edge */}
             {showStatusBadge && (
               <span
                 className={`ml-auto whitespace-nowrap shrink-0 text-[7px] font-black uppercase px-1.5 py-0.5 rounded-full border tracking-widest ${status.color}`}
@@ -142,30 +147,86 @@ export default function AdminTicketCard({
             )}
           </div>
 
-          {/* TITLE & DATE */}
-          <div className="flex justify-between items-start gap-2">
-            <div className="space-y-0.5 flex-1 min-w-0">
-              <span className="text-[7px] font-black text-blue-500/40 uppercase tracking-widest leading-none">
-                ID: #{ticket.id}
-              </span>
-              <h3 className="text-base font-black text-gray-900 dark:text-white uppercase tracking-tight truncate leading-tight">
-                {ticket.title || "Untitled Project"}
-              </h3>
+          {/* 🎯 IDENTITY & CONTENT SECTION */}
+          <div className="space-y-3 px-1">
+            {/* 🔝 TOP ROW: Submitter Info + Moved Date Indicator */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-white/10 shrink-0 border border-gray-300 dark:border-white/5 shadow-sm">
+                  {ticket.profiles?.avatar_url ? (
+                    <img
+                      src={ticket.profiles.avatar_url}
+                      className="w-full h-full object-cover"
+                      alt="user"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-400">
+                      <FaUser size={12} />
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col min-w-0 leading-none flex-1">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="text-[10px] font-black text-gray-900 dark:text-white truncate tracking-tight uppercase">
+                      {ticket.profiles?.full_name || "Guest User"}
+                    </span>
+                    <span className="text-[8px] font-black text-blue-500/40 uppercase tracking-widest shrink-0">
+                      #{ticket.id}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-[7px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-tight">
+                    <span className="flex items-center gap-0.5 opacity-80">
+                      <FaPlusCircle
+                        size={6}
+                        className="text-gray-400 dark:text-gray-600"
+                      />{" "}
+                      {timeAgo(ticket.created_at)}
+                    </span>
+                    <span className="flex items-center gap-0.5 text-blue-500 dark:text-blue-400/60">
+                      <FaPen size={6} />{" "}
+                      {timeAgo(ticket.updated_at || ticket.created_at)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 📅 Date indicator moved up to the Header row */}
+              <div
+                className={`flex flex-col items-center justify-center min-w-[42px] h-[42px] rounded-xl border px-1 transition-all ${ticket.deadline ? "bg-red-500/10 border-red-500/20 shadow-lg" : "bg-gray-100/70 border-gray-200/60 dark:bg-white/5 dark:border-white/10 opacity-60 dark:opacity-30"}`}
+              >
+                <span
+                  className={`text-[6px] font-black tracking-tight mb-0.5 ${ticket.deadline ? "text-red-500" : "text-gray-500 dark:text-gray-400"}`}
+                >
+                  {cal.month}
+                </span>
+                <span
+                  className={`text-[11px] font-black leading-none ${ticket.deadline ? "text-red-600 dark:text-white" : "text-gray-600 dark:text-gray-400"}`}
+                >
+                  {cal.day}
+                </span>
+              </div>
             </div>
 
-            <div
-              className={`flex flex-col items-center justify-center min-w-[48px] h-[48px] rounded-xl border px-1.5 transition-all ${ticket.deadline ? "bg-red-500/10 border-red-500/20 shadow-lg" : "bg-gray-100/70 border-gray-200/60 dark:bg-white/5 dark:border-white/10 opacity-60 dark:opacity-30"}`}
-            >
-              <span
-                className={`text-[7px] font-black tracking-tight mb-0.5 ${ticket.deadline ? "text-red-500" : "text-gray-500 dark:text-gray-400"}`}
-              >
-                {cal.month}
-              </span>
-              <span
-                className={`text-lg font-black leading-none ${ticket.deadline ? "text-red-600 dark:text-white" : "text-gray-600 dark:text-gray-400"}`}
-              >
-                {cal.day}
-              </span>
+            {/* 🏷️ TITLE (Now full width) */}
+            <h3 className="text-base font-black text-gray-900 dark:text-white uppercase tracking-tight truncate leading-tight pt-1">
+              {ticket.title || "Untitled Project"}
+            </h3>
+
+            {/* 🤖 AI SUMMARY (Now full width) */}
+            <div className="py-2 px-3 bg-gray-50/50 dark:bg-white/5 rounded-xl border border-gray-100 dark:border-white/5 mt-1 w-full">
+              <div className="flex items-center gap-1.5 mb-1 opacity-40">
+                <div className="w-1 h-1 rounded-full bg-blue-500 animate-pulse" />
+                <span className="text-[6px] font-black uppercase tracking-[0.2em] text-gray-500 dark:text-white">
+                  AI Summary
+                </span>
+              </div>
+              <p className="text-[10px] font-medium leading-relaxed text-gray-600 dark:text-gray-400 line-clamp-2 italic">
+                {ticket.description
+                  ? "Summarized description would appear here..."
+                  : "No description given."}
+              </p>
             </div>
           </div>
 
@@ -174,7 +235,7 @@ export default function AdminTicketCard({
             <div className="flex gap-3">
               <p className="text-[8px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
                 <FaLayerGroup size={10} className="text-blue-500/30" />
-                {trackUrls.length} {trackUrls.length === 1 ? "Track" : "Tracks"}
+                Track {currentIndex + 1} of {trackUrls.length}
               </p>
               {ticket.target_bpm && (
                 <p className="text-[8px] font-bold text-blue-500 uppercase tracking-widest flex items-center gap-1.5">
