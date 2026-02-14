@@ -41,16 +41,13 @@ export default function AdminTicketCard({
 
   const trackUrls = ticket.tracks?.map((t: any) => t.url).filter(Boolean) || [];
   const rawThumbnails = getYouTubeThumbnail(trackUrls);
-  const fetchedThumbnails: string[] = rawThumbnails
+
+  // 🛠️ Clean thumbnails: No more fallback strings
+  const thumbnails: string[] = rawThumbnails
     ? (Array.isArray(rawThumbnails) ? rawThumbnails : [rawThumbnails]).filter(
         (url): url is string => url !== null && url !== undefined,
       )
     : [];
-
-  const thumbnails: string[] =
-    fetchedThumbnails.length > 0
-      ? fetchedThumbnails
-      : ["/images/placeholder-pattern.jpg"];
 
   // 🕒 Calendar Date Helper
   const getCalendarDate = (dateStr: string | null | undefined) => {
@@ -69,11 +66,15 @@ export default function AdminTicketCard({
       onClick={() => router.push(`/pages/request/${ticket.id}`)}
       className="group relative overflow-hidden bg-white dark:bg-[#111111] border border-gray-100 dark:border-white/5 rounded-[2.2rem] p-5 shadow-sm hover:shadow-2xl transition-all duration-500 h-full min-h-[520px] flex flex-col cursor-pointer"
     >
-      <BackgroundCarousel
-        images={thumbnails}
-        blur="blur-xl"
-        slideDuration={6000}
-      />
+      {/* 🚀 FIXED: Only render if we have actual images */}
+      {thumbnails.length > 0 && (
+        <BackgroundCarousel
+          images={thumbnails}
+          blur="blur-xl"
+          slideDuration={6000}
+        />
+      )}
+
       <div className="absolute inset-0 z-1 bg-linear-to-b from-white/10 via-white/80 to-white dark:from-black/10 dark:via-black/60 dark:to-[#111111] pointer-events-none" />
 
       <div className="relative z-10 flex flex-col h-full flex-1">
@@ -85,9 +86,9 @@ export default function AdminTicketCard({
           }}
           className="w-full h-44 rounded-3xl overflow-hidden border-2 border-transparent group-hover:border-blue-500/30 transition-all shadow-2xl mb-5 bg-gray-50 dark:bg-black/20 cursor-alias z-20"
         >
-          {fetchedThumbnails.length > 0 ? (
+          {thumbnails.length > 0 ? (
             <CarouselThumbnail
-              images={fetchedThumbnails}
+              images={thumbnails}
               links={trackUrls}
               showIndicators={true}
               slideDuration={4000}
@@ -98,7 +99,6 @@ export default function AdminTicketCard({
         </div>
 
         <div className="space-y-4 flex-1 flex flex-col">
-          {/* Header Badges */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span
@@ -117,7 +117,6 @@ export default function AdminTicketCard({
             </div>
           </div>
 
-          {/* Title & Wider Calendar View */}
           <div className="flex justify-between items-center gap-4">
             <div className="space-y-1 flex-1 min-w-0">
               <span className="text-[7px] font-black text-blue-500/40 uppercase tracking-widest">
@@ -128,7 +127,6 @@ export default function AdminTicketCard({
               </h3>
             </div>
 
-            {/* 🗓️ Styled Calendar Box - Now Wider */}
             <div
               className={`flex flex-col items-center justify-center min-w-[54px] h-[54px] rounded-2xl border px-2 transition-all ${ticket.deadline ? "bg-red-500/10 border-red-500/20" : "bg-white/5 border-white/10 opacity-40"}`}
             >
@@ -145,7 +143,6 @@ export default function AdminTicketCard({
             </div>
           </div>
 
-          {/* Stats Bar */}
           <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-white/5">
             <div className="flex gap-4">
               <p className="text-[9px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -170,7 +167,6 @@ export default function AdminTicketCard({
             </button>
           </div>
 
-          {/* Price Box */}
           <div className="bg-white/5 border border-white/5 rounded-2xl px-4 py-3 flex items-center justify-between">
             <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">
               Total Investment
@@ -183,7 +179,6 @@ export default function AdminTicketCard({
             </div>
           </div>
 
-          {/* ⚡ ACTION AREA */}
           <div className="mt-auto pt-2">
             {colId === "done" ? (
               <div className="w-full flex items-center justify-center gap-3 py-4 rounded-3xl bg-green-500/10 border border-green-500/20 text-green-500 font-black uppercase text-[9px] tracking-widest cursor-default">
