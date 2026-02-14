@@ -13,6 +13,7 @@ import {
 } from "react-icons/fa";
 import Link from "next/link";
 import { useToast } from "@/app/context/ToastContext";
+import LoadingLayout from "@/app/layouts/LoadingLayout";
 
 // Components
 import AdminTicketCard from "@/app/components/AdminTicketCard";
@@ -199,12 +200,13 @@ export default function AdminPage() {
 
   if (isPageLoading)
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center gap-4">
-        <FaMusic className="text-blue-500 animate-bounce text-3xl" />
-        <p className="text-white font-black tracking-widest uppercase text-xs">
-          Syncing Board...
-        </p>
-      </div>
+      <LoadingLayout
+        message="Syncing Board..."
+        showSpinner={false}
+        icon={<FaMusic className="text-blue-500 animate-bounce text-3xl" />}
+        containerClassName="bg-gray-50 text-gray-900 dark:bg-[#0a0a0a] dark:text-white gap-4"
+        messageClassName="text-gray-700 dark:text-white font-black tracking-widest uppercase text-xs"
+      />
     );
 
   return (

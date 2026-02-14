@@ -28,6 +28,7 @@ import { useToast } from "@/app/context/ToastContext";
 import { Ticket } from "@/app/types";
 import ConfirmationModal from "@/app/components/ConfirmationModal";
 import Link from "next/link";
+import LoadingLayout from "@/app/layouts/LoadingLayout";
 
 // 🕒 TIME AGO HELPER
 function timeAgo(dateString: string) {
@@ -342,18 +343,10 @@ export default function RequestDetailPage() {
 
   if (isPageLoading)
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center space-y-6">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-blue-600/20 rounded-full" />
-          <div className="absolute inset-0 w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-        </div>
-        <div className="flex flex-col items-center space-y-2">
-          <FaMusic className="text-blue-500 text-2xl animate-bounce" />
-          <p className="text-gray-400 font-bold tracking-widest uppercase text-xs animate-pulse">
-            Syncing Request...
-          </p>
-        </div>
-      </div>
+      <LoadingLayout
+        message="Syncing Request..."
+        icon={<FaMusic className="text-blue-500 text-2xl animate-bounce" />}
+      />
     );
 
   if (!ticket)

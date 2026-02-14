@@ -6,6 +6,7 @@ import Link from "next/link";
 import { FaMusic, FaPlus, FaTicketAlt } from "react-icons/fa";
 import TicketCard from "@/app/components/TicketCard";
 import { Ticket } from "@/app/types";
+import LoadingLayout from "@/app/layouts/LoadingLayout";
 
 export default function MyTicketsPage() {
   const router = useRouter();
@@ -23,14 +24,21 @@ export default function MyTicketsPage() {
       .channel(`my-tickets-${userId}`)
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "song_requests", filter: `user_id=eq.${userId}` },
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "song_requests",
+          filter: `user_id=eq.${userId}`,
+        },
         (payload) => {
           setTickets((prev) =>
             prev.map((ticket) =>
-              ticket.id === payload.new.id ? ({ ...ticket, ...payload.new } as Ticket) : ticket
-            )
+              ticket.id === payload.new.id
+                ? ({ ...ticket, ...payload.new } as Ticket)
+                : ticket,
+            ),
           );
-        }
+        },
       )
       .subscribe();
 
@@ -41,11 +49,13 @@ export default function MyTicketsPage() {
 
   async function fetchMyTickets() {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) { 
-        router.push("/auth"); 
-        return; 
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.push("/auth");
+        return;
       }
       setUserId(user.id);
 
@@ -70,25 +80,16 @@ export default function MyTicketsPage() {
   // 🛡️ THEMED LOADING STATE
   if (isPageLoading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center space-y-6">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-blue-600/20 rounded-full" />
-          <div className="absolute inset-0 w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-        </div>
-        <div className="flex flex-col items-center space-y-2">
-          <FaMusic className="text-blue-500 text-2xl animate-bounce" />
-          <p className="text-gray-400 font-bold tracking-widest uppercase text-xs animate-pulse">
-            Loading your tickets...
-          </p>
-        </div>
-      </div>
+      <LoadingLayout
+        message="Loading your tickets..."
+        icon={<FaMusic className="text-blue-500 text-2xl animate-bounce" />}
+      />
     );
   }
 
   return (
     /* 🌊 FLUID OUTER CONTAINER: Stretches to full screen edges */
     <div className="min-h-screen w-full transition-colors duration-500 bg-gray-50 dark:bg-[#0d0d0d] overflow-x-hidden">
-      
       {/* 🌫️ OPTIONAL: ADDED DECORATIVE BLOBS FOR COHESION */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0 opacity-10">
         <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-600 rounded-full blur-[120px]" />
@@ -97,7 +98,6 @@ export default function MyTicketsPage() {
 
       {/* 🎯 CENTERED FIXED CONTAINER: Holds the actual content */}
       <div className="relative z-10 max-w-7xl mx-auto px-6 py-10 sm:py-16">
-        
         {/* --- HEADER --- */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-12">
           <div className="space-y-1">
@@ -109,11 +109,12 @@ export default function MyTicketsPage() {
             </p>
           </div>
 
-          <Link 
-            href="/pages/request" 
+          <Link
+            href="/pages/request"
             className="group bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-2xl font-bold flex items-center gap-3 shadow-xl shadow-blue-600/20 transition-all active:scale-[0.98]"
           >
-            <FaPlus className="group-hover:rotate-90 transition-transform duration-300" /> New Request
+            <FaPlus className="group-hover:rotate-90 transition-transform duration-300" />{" "}
+            New Request
           </Link>
         </div>
 
@@ -136,17 +137,17 @@ export default function MyTicketsPage() {
               No Requests Yet
             </h3>
             <p className="mb-10 text-gray-500 dark:text-gray-400 max-w-sm mx-auto text-lg leading-relaxed">
-              Your audio queue is empty. Start by adding your first song request to get tailored edits!
+              Your audio queue is empty. Start by adding your first song request
+              to get tailored edits!
             </p>
-            <Link 
-              href="/pages/request" 
+            <Link
+              href="/pages/request"
               className="inline-block bg-blue-600 hover:bg-blue-500 text-white px-10 py-4 rounded-2xl font-bold transition-all shadow-2xl shadow-blue-500/30 active:scale-[0.95]"
             >
               Create Your First Request
             </Link>
           </div>
         )}
-
       </div>
     </div>
   );
