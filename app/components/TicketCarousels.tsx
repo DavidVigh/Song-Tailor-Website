@@ -13,6 +13,7 @@ interface CarouselProps {
   animationDuration?: number;
   showIndicators?: boolean;
   blur?: string;
+  onIndexChange?: (index: number) => void;
 }
 
 // 🖼️ 1. Thumbnail Carousel
@@ -21,7 +22,8 @@ export const CarouselThumbnail = ({
   links = [],
   slideDuration = DEFAULT_SLIDE_DURATION,
   animationDuration = DEFAULT_ANIMATION_DURATION,
-  showIndicators = false
+  showIndicators = false,
+  onIndexChange,
 }: CarouselProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(true);
@@ -31,7 +33,10 @@ export const CarouselThumbnail = ({
 
   useEffect(() => {
     if (images.length <= 1) return;
-    const interval = setInterval(() => setCurrentIndex((prev) => prev + 1), slideDuration);
+    const interval = setInterval(
+      () => setCurrentIndex((prev) => prev + 1),
+      slideDuration,
+    );
     return () => clearInterval(interval);
   }, [images.length, slideDuration]);
 
@@ -53,6 +58,11 @@ export const CarouselThumbnail = ({
     }
   }, [currentIndex, images.length, isTransitioning, animationDuration]);
 
+  useEffect(() => {
+    if (!onIndexChange || images.length === 0) return;
+    onIndexChange(currentIndex % images.length);
+  }, [currentIndex, images.length, onIndexChange]);
+
   return (
     <div className="relative w-full h-full overflow-hidden bg-gray-100 dark:bg-black">
       <div
@@ -60,7 +70,9 @@ export const CarouselThumbnail = ({
         style={{
           width: `${extendedImages.length * 100}%`,
           transform: `translateX(-${(currentIndex * 100) / extendedImages.length}%)`,
-          transition: isTransitioning ? `transform ${animationDuration}ms ease-in-out` : 'none'
+          transition: isTransitioning
+            ? `transform ${animationDuration}ms ease-in-out`
+            : "none",
         }}
       >
         {extendedImages.map((img, i) => (
@@ -72,9 +84,14 @@ export const CarouselThumbnail = ({
               className="block w-full h-full relative group/thumb"
               onPointerDown={(e) => e.stopPropagation()}
             >
-              <img src={img} alt="" className="absolute inset-0 w-full h-full object-cover" />
+              <img
+                src={img}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover"
+              />
 
-              <div className="absolute inset-0 flex items-center justify-center transition-colors duration-300 
+              <div
+                className="absolute inset-0 flex items-center justify-center transition-colors duration-300 
                 bg-black/10 group-hover/thumb:bg-black/20"
               >
                 <FaYoutube
@@ -90,12 +107,12 @@ export const CarouselThumbnail = ({
       {showIndicators && images.length > 1 && (
         <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 z-20 pointer-events-none">
           {images.map((_, i) => {
-            const isActive = (currentIndex % images.length) === i;
+            const isActive = currentIndex % images.length === i;
             return (
               <div
                 key={i}
                 className={`h-1.5 rounded-full transition-all duration-300 shadow-sm
-                  ${isActive ? 'w-4 bg-white' : 'w-1.5 bg-white/60'}
+                  ${isActive ? "w-4 bg-white" : "w-1.5 bg-white/60"}
                 `}
               />
             );
@@ -110,7 +127,7 @@ export const CarouselThumbnail = ({
 export const BackgroundCarousel = ({
   images,
   slideDuration = DEFAULT_SLIDE_DURATION,
-  blur = "blur-sm"
+  blur = "blur-sm",
 }: CarouselProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
 
