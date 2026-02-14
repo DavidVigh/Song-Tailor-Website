@@ -24,7 +24,7 @@ export default function AdminColumn({
         duration: 0.4,
         ease: [0.4, 0, 0.2, 1],
       }}
-      className="flex flex-col justify-start rounded-[2.5rem] bg-[#0f0f0f]/60 border border-white/5 shadow-2xl overflow-hidden w-full"
+      className="flex flex-col justify-start rounded-[2.5rem] bg-white dark:bg-[#0f0f0f]/60 border border-black/5 dark:border-white/5 shadow-2xl overflow-hidden w-full"
     >
       {/* 🟢 HEADER: Locked at 64px. shrink-0 keeps it from moving. */}
       <div className="h-[64px] min-h-[64px] w-full px-6 flex items-center justify-between shrink-0 bg-[#0a0a0a]/40 border-b border-white/5 z-20">
