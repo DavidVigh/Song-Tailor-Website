@@ -1,31 +1,25 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { DragDropContext, DropResult } from "@hello-pangea/dnd";
 import {
-  DragDropContext,
-  Droppable,
-  Draggable,
-  DropResult,
-} from "@hello-pangea/dnd";
-import {
-  FaCheckCircle,
-  FaPlay,
   FaUsers,
   FaPlus,
-  FaLayerGroup,
-  FaRegCircle,
-  FaMusic,
   FaThLarge,
   FaList,
-  FaChevronDown,
+  FaTable,
+  FaMusic,
 } from "react-icons/fa";
 import Link from "next/link";
 import { useToast } from "@/app/context/ToastContext";
 
-// ♻️ REUSABLE COMPONENTS & TYPES
+// Components
 import AdminTicketCard from "@/app/components/AdminTicketCard";
 import AdminTicketRow from "@/app/components/AdminTicketRow";
+import AdminSearch from "@/app/components/AdminSearch";
+import AdminCategorizedView from "@/app/components/AdminCategorizedView";
+import AdminColumn from "@/app/components/AdminColumn";
 import ConfirmationModal from "@/app/components/ConfirmationModal";
 import { Ticket } from "@/app/types";
 
@@ -42,102 +36,52 @@ export default function AdminPage() {
   const [deleting, setDeleting] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // 💾 PERSISTENCE LOGIC: Initialize with a default, then update from storage
-  const [viewMode, setViewMode] = useState<"grid" | "compact">("grid");
-
-  // Load user preference on mount
-  useEffect(() => {
-    const savedMode = localStorage.getItem("admin_view_mode");
-    if (savedMode === "grid" || savedMode === "compact") {
-      setViewMode(savedMode);
-    }
-  }, []);
-
-  // Update localStorage whenever mode changes
-  const handleViewChange = (mode: "grid" | "compact") => {
-    setViewMode(mode);
-    localStorage.setItem("admin_view_mode", mode);
-  };
-
+  // Persistence for view mode
+  const [viewMode, setViewMode] = useState<"grid" | "compact" | "categorized">(
+    "grid",
+  );
   const [collapsedColumns, setCollapsedColumns] = useState<
     Record<string, boolean>
   >({});
+
+  // Search & Filters
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filters, setFilters] = useState({ genre: "all", urgency: "all" });
+
   const { showToast } = useToast();
   const router = useRouter();
   const [ticketToDelete, setTicketToDelete] = useState<number | null>(null);
 
   useEffect(() => {
+    const savedMode = localStorage.getItem("admin_view_mode");
+    if (savedMode) setViewMode(savedMode as any);
     checkAdmin();
   }, []);
+
+  const handleViewChange = (mode: "grid" | "compact" | "categorized") => {
+    setViewMode(mode);
+    localStorage.setItem("admin_view_mode", mode);
+  };
 
   async function checkAdmin() {
     try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/auth");
-        return;
-      }
+      if (!user) return router.push("/auth");
       const { data: profile } = await supabase
         .from("profiles")
         .select("role")
         .eq("id", user.id)
         .single();
-      if (profile?.role !== "admin") {
-        router.push("/");
-        return;
-      }
+      if (profile?.role !== "admin") return router.push("/");
       setIsAdmin(true);
       await fetchTickets();
       setupRealtimeSubscription();
       setIsPageLoading(false);
     } catch (err) {
-      console.error("Admin check error:", err);
       router.push("/");
     }
-  }
-
-  function setupRealtimeSubscription() {
-    const channel = supabase
-      .channel("realtime tickets")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "song_requests" },
-        async (payload) => {
-          if (payload.eventType === "INSERT") {
-            const { data: newTicket } = await supabase
-              .from("song_requests")
-              .select(`*, profiles (full_name, avatar_url)`)
-              .eq("id", payload.new.id)
-              .single();
-            if (newTicket)
-              setTickets((prev) =>
-                [...prev, newTicket as Ticket].sort(
-                  (a, b) => a.position - b.position,
-                ),
-              );
-          } else if (payload.eventType === "UPDATE") {
-            setTickets((prev) =>
-              prev
-                .map((ticket) =>
-                  ticket.id === payload.new.id
-                    ? { ...ticket, ...payload.new }
-                    : ticket,
-                )
-                .sort((a, b) => a.position - b.position),
-            );
-          } else if (payload.eventType === "DELETE") {
-            setTickets((prev) =>
-              prev.filter((ticket) => ticket.id !== payload.old.id),
-            );
-          }
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }
 
   async function fetchTickets() {
@@ -148,284 +92,221 @@ export default function AdminPage() {
     if (data) setTickets(data as Ticket[]);
   }
 
-  const toggleColumn = (colId: string) => {
-    setCollapsedColumns((prev) => ({ ...prev, [colId]: !prev[colId] }));
-  };
+  function setupRealtimeSubscription() {
+    const channel = supabase
+      .channel("realtime_admin")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "song_requests" },
+        fetchTickets,
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }
+
+  const filteredTickets = useMemo(() => {
+    return tickets.filter((t) => {
+      const matchesSearch =
+        t.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.id.toString().includes(searchQuery);
+      const matchesGenre = filters.genre === "all" || t.genre === filters.genre;
+      const daysLeft = t.deadline
+        ? Math.ceil(
+            (new Date(t.deadline).getTime() - new Date().getTime()) / 86400000,
+          )
+        : 999;
+      const matchesUrgency =
+        filters.urgency === "all" ||
+        (filters.urgency === "overdue" && daysLeft < 0) ||
+        (filters.urgency === "urgent" && daysLeft >= 0 && daysLeft <= 3) ||
+        (filters.urgency === "soon" && daysLeft > 3 && daysLeft <= 7);
+      return matchesSearch && matchesGenre && matchesUrgency;
+    });
+  }, [tickets, searchQuery, filters]);
 
   async function onDragEnd(result: DropResult) {
     const { source, destination, draggableId } = result;
-    if (!destination) return;
     if (
-      source.droppableId === destination.droppableId &&
-      source.index === destination.index
+      !destination ||
+      (source.droppableId === destination.droppableId &&
+        source.index === destination.index)
     )
       return;
     const allTickets = Array.from(tickets);
-    const draggedTicket = allTickets.find(
-      (t) => t.id.toString() === draggableId,
-    );
-    if (!draggedTicket) return;
+    const dragged = allTickets.find((t) => t.id.toString() === draggableId);
+    if (!dragged) return;
     const newStatus = destination.droppableId as Ticket["status"];
-    draggedTicket.status = newStatus;
-    const destColumnTickets = allTickets
+    const destColumn = allTickets
       .filter((t) => t.status === newStatus && t.id.toString() !== draggableId)
       .sort((a, b) => a.position - b.position);
-    let newPosition;
-    if (destColumnTickets.length === 0) newPosition = 1000;
-    else if (destination.index === 0)
-      newPosition = destColumnTickets[0].position / 2;
-    else if (destination.index >= destColumnTickets.length)
-      newPosition =
-        destColumnTickets[destColumnTickets.length - 1].position + 1000;
-    else
-      newPosition =
-        (destColumnTickets[destination.index - 1].position +
-          destColumnTickets[destination.index].position) /
-        2;
-    draggedTicket.position = newPosition;
-    setTickets([...allTickets].sort((a, b) => a.position - b.position));
+    let newPos = 1000;
+    if (destColumn.length > 0) {
+      if (destination.index === 0) newPos = destColumn[0].position / 2;
+      else if (destination.index >= destColumn.length)
+        newPos = destColumn[destColumn.length - 1].position + 1000;
+      else
+        newPos =
+          (destColumn[destination.index - 1].position +
+            destColumn[destination.index].position) /
+          2;
+    }
+    setTickets((prev) =>
+      prev
+        .map((t) =>
+          t.id === dragged.id
+            ? { ...t, status: newStatus, position: newPos }
+            : t,
+        )
+        .sort((a, b) => a.position - b.position),
+    );
     await supabase
       .from("song_requests")
-      .update({ status: newStatus, position: newPosition })
+      .update({ status: newStatus, position: newPos })
       .eq("id", draggableId);
+  }
+
+  async function advanceStatus(ticket: Ticket) {
+    const flow: Record<string, Ticket["status"]> = {
+      new: "accepted",
+      accepted: "in progress",
+      "in progress": "done",
+    };
+    const nextStatus = flow[ticket.status];
+    if (!nextStatus) return;
+    await supabase
+      .from("song_requests")
+      .update({ status: nextStatus })
+      .eq("id", ticket.id);
+    fetchTickets();
   }
 
   async function executeDelete() {
     if (!ticketToDelete) return;
     setDeleting(true);
-    const previousTickets = [...tickets];
-    setTickets((prev) => prev.filter((t) => t.id !== ticketToDelete));
     const { error } = await supabase
       .from("song_requests")
       .delete()
       .eq("id", ticketToDelete);
     setDeleting(false);
-    if (error) {
-      setTickets(previousTickets);
-      showToast("Failed to delete ticket", "error");
-    } else {
-      showToast("Ticket deleted successfully", "info");
+    if (!error) {
+      setTickets((prev) => prev.filter((t) => t.id !== ticketToDelete));
       setTicketToDelete(null);
+      showToast("Request deleted", "info");
     }
   }
-
-  async function advanceStatus(ticket: Ticket) {
-    const statusFlow: Record<string, Ticket["status"]> = {
-      new: "accepted",
-      accepted: "in progress",
-      "in progress": "done",
-    };
-    const nextStatus = statusFlow[ticket.status];
-    if (!nextStatus) return;
-    const nextColumnTickets = tickets.filter((t) => t.status === nextStatus);
-    const lastPosition =
-      nextColumnTickets.length > 0
-        ? Math.max(...nextColumnTickets.map((t) => t.position))
-        : 0;
-    const newPosition = lastPosition + 1000;
-    setTickets((prev) =>
-      prev.map((t) =>
-        t.id === ticket.id
-          ? { ...t, status: nextStatus, position: newPosition }
-          : t,
-      ),
-    );
-    await supabase
-      .from("song_requests")
-      .update({ status: nextStatus, position: newPosition })
-      .eq("id", ticket.id);
-  }
-
-  const getHeaderColors = (colId: string) => {
-    switch (colId) {
-      case "accepted":
-        return {
-          text: "text-blue-600 dark:text-blue-400",
-          icon: "text-blue-500 dark:text-blue-400",
-          border: "border-blue-200 dark:border-blue-800/50",
-        };
-      case "in progress":
-        return {
-          text: "text-yellow-600 dark:text-yellow-400",
-          icon: "text-yellow-500 dark:text-yellow-400",
-          border: "border-yellow-200 dark:border-yellow-800/50",
-        };
-      case "done":
-        return {
-          text: "text-green-600 dark:text-green-400",
-          icon: "text-green-500 dark:text-green-400",
-          border: "border-green-200 dark:border-green-800/50",
-        };
-      default:
-        return {
-          text: "text-gray-600 dark:text-gray-400",
-          icon: "text-gray-400 dark:text-gray-500",
-          border: "border-gray-200 dark:border-gray-700",
-        };
-    }
-  };
 
   if (isPageLoading)
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center text-white font-bold animate-pulse">
-        Loading Admin Board...
+      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center gap-4">
+        <FaMusic className="text-blue-500 animate-bounce text-3xl" />
+        <p className="text-white font-black tracking-widest uppercase text-xs">
+          Syncing Board...
+        </p>
       </div>
     );
-  if (!isAdmin) return null;
 
   return (
-    <div className="min-h-screen p-4 md:p-8 max-w-[1600px] mx-auto relative">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-3 text-gray-900 dark:text-white">
-          <span className="bg-red-600 text-xs px-2 py-1 rounded text-white font-bold tracking-wider">
-            ADMIN
-          </span>{" "}
-          Board
-        </h1>
-
-        <div className="flex flex-wrap gap-3 items-center">
-          <div className="bg-white dark:bg-[#1e1e1e] p-1 rounded-xl border border-gray-200 dark:border-[#333] flex items-center shadow-sm mr-2">
-            <button
-              onClick={() => handleViewChange("grid")}
-              className={`p-2 rounded-lg transition-all ${viewMode === "grid" ? "bg-gray-100 dark:bg-white/10 text-blue-500" : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"}`}
-            >
-              <FaThLarge size={14} />
-            </button>
-            <button
-              onClick={() => handleViewChange("compact")}
-              className={`p-2 rounded-lg transition-all ${viewMode === "compact" ? "bg-gray-100 dark:bg-white/10 text-blue-500" : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"}`}
-            >
-              <FaList size={14} />
-            </button>
+    <main className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a] transition-colors overflow-x-hidden">
+      {/* 📦 BOXED CONTAINER */}
+      <div className="container mx-auto p-4 md:p-8 max-w-[1500px]">
+        {/* Header Section */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8">
+          <div className="flex items-center gap-3">
+            <span className="bg-red-600 text-[10px] font-black text-white px-2 py-1 rounded">
+              ADMIN
+            </span>
+            <h1 className="text-4xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">
+              Board
+            </h1>
           </div>
-          <Link
-            href="/pages/admin/user"
-            className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all shadow-sm hover:shadow-md text-sm border bg-white text-gray-700 border-gray-200 dark:bg-[#252525] dark:text-gray-200 dark:border-[#333]"
-          >
-            <FaUsers className="text-blue-500" /> List Users
-          </Link>
-          <Link
-            href="/pages/request/new"
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-lg text-sm border border-transparent"
-          >
-            <FaPlus /> New Request
-          </Link>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="bg-white dark:bg-[#1e1e1e] p-1 rounded-xl border border-gray-200 dark:border-[#333] flex shadow-sm">
+              <button
+                onClick={() => handleViewChange("grid")}
+                className={`p-2 rounded-lg transition-all ${viewMode === "grid" ? "bg-blue-600 text-white shadow-lg" : "text-gray-400 hover:text-white"}`}
+              >
+                <FaThLarge size={14} />
+              </button>
+              <button
+                onClick={() => handleViewChange("compact")}
+                className={`p-2 rounded-lg transition-all ${viewMode === "compact" ? "bg-blue-600 text-white shadow-lg" : "text-gray-400 hover:text-white"}`}
+              >
+                <FaList size={14} />
+              </button>
+              <button
+                onClick={() => handleViewChange("categorized")}
+                className={`p-2 rounded-lg transition-all ${viewMode === "categorized" ? "bg-blue-600 text-white shadow-lg" : "text-gray-400 hover:text-white"}`}
+              >
+                <FaTable size={14} />
+              </button>
+            </div>
+            <Link
+              href="/pages/admin/user"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-[#333] text-xs uppercase tracking-widest hover:text-blue-500 transition-all"
+            >
+              <FaUsers className="text-blue-500" /> Users
+            </Link>
+            <Link
+              href="/pages/request/new"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold bg-blue-600 text-white text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-transform"
+            >
+              <FaPlus /> New Request
+            </Link>
+          </div>
         </div>
+
+        {/* Search & Centered Filters */}
+        <AdminSearch
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          filters={filters}
+          setFilters={setFilters}
+        />
+
+        {/* Board Views */}
+        {viewMode === "categorized" ? (
+          <AdminCategorizedView
+            tickets={filteredTickets}
+            advanceStatus={advanceStatus}
+            confirmDelete={setTicketToDelete}
+          />
+        ) : (
+          <DragDropContext onDragEnd={onDragEnd}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
+              {columns.map((col) => (
+                <AdminColumn
+                  key={col.id}
+                  col={col}
+                  tickets={filteredTickets.filter((t) => t.status === col.id)}
+                  isCollapsed={collapsedColumns[col.id]}
+                  toggleCollapse={() =>
+                    setCollapsedColumns((prev) => ({
+                      ...prev,
+                      [col.id]: !prev[col.id],
+                    }))
+                  }
+                  viewMode={viewMode}
+                  advanceStatus={advanceStatus}
+                  confirmDelete={setTicketToDelete}
+                />
+              ))}
+            </div>
+          </DragDropContext>
+        )}
       </div>
-
-      <DragDropContext onDragEnd={onDragEnd}>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 items-start">
-          {columns.map((col) => {
-            const colors = getHeaderColors(col.id);
-            const isCollapsed = collapsedColumns[col.id];
-
-            return (
-              <div key={col.id} className="flex flex-col h-full">
-                <div
-                  onClick={() => toggleColumn(col.id)}
-                  className={`flex items-center justify-between px-4 py-3 mb-4 rounded-xl border-t-4 shadow-sm bg-white dark:bg-[#1e1e1e] ${colors.border} cursor-pointer hover:bg-gray-50 dark:hover:bg-[#252525] transition-all select-none group`}
-                >
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={`p-1 rounded-full transition-all duration-300 ${isCollapsed ? "-rotate-90 bg-gray-100 dark:bg-white/10" : "rotate-0 group-hover:bg-gray-100 dark:group-hover:bg-white/5"}`}
-                    >
-                      <FaChevronDown className={`text-[10px] text-gray-400`} />
-                    </div>
-                    {col.id === "new" && (
-                      <FaRegCircle className={`${colors.icon} text-[10px]`} />
-                    )}
-                    {col.id === "done" && (
-                      <FaCheckCircle className={colors.icon} />
-                    )}
-                    {col.id === "in progress" && (
-                      <FaPlay className={`${colors.icon} text-[10px]`} />
-                    )}
-                    {col.id === "accepted" && (
-                      <FaLayerGroup className={colors.icon} />
-                    )}
-                    <h2
-                      className={`font-black text-xs tracking-[0.2em] uppercase ${colors.text}`}
-                    >
-                      {col.title}
-                    </h2>
-                  </div>
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors ${isCollapsed ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 dark:bg-[#333] dark:text-gray-400"}`}
-                  >
-                    {tickets.filter((t) => t.status === col.id).length}
-                  </span>
-                </div>
-
-                <div
-                  className={`grid transition-[grid-template-rows,opacity] duration-300 ease-in-out ${isCollapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"}`}
-                >
-                  <div className="overflow-hidden min-h-0">
-                    <Droppable droppableId={col.id}>
-                      {(provided, snapshot) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.droppableProps}
-                          className={`flex-1 rounded-2xl p-2 transition-colors min-h-[150px] ${snapshot.isDraggingOver ? "bg-gray-100/50 border-2 border-dashed border-gray-300 dark:bg-[#252525]/30 dark:border-[#444]" : ""}`}
-                        >
-                          {tickets
-                            .filter((t) => t.status === col.id)
-                            .map((ticket, index) => (
-                              <Draggable
-                                key={ticket.id}
-                                draggableId={ticket.id.toString()}
-                                index={index}
-                              >
-                                {(provided, snapshot) => (
-                                  <div
-                                    ref={provided.innerRef}
-                                    {...provided.draggableProps}
-                                    {...provided.dragHandleProps}
-                                    className={`mb-4 ${snapshot.isDragging ? "z-50" : ""}`}
-                                  >
-                                    {viewMode === "grid" ? (
-                                      <AdminTicketCard
-                                        ticket={ticket}
-                                        colId={col.id}
-                                        confirmDelete={(id) =>
-                                          setTicketToDelete(id)
-                                        }
-                                        advanceStatus={advanceStatus}
-                                      />
-                                    ) : (
-                                      <AdminTicketRow
-                                        ticket={ticket}
-                                        colId={col.id}
-                                        confirmDelete={(id) =>
-                                          setTicketToDelete(id)
-                                        }
-                                        advanceStatus={advanceStatus}
-                                      />
-                                    )}
-                                  </div>
-                                )}
-                              </Draggable>
-                            ))}
-                          {provided.placeholder}
-                        </div>
-                      )}
-                    </Droppable>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </DragDropContext>
 
       <ConfirmationModal
         isOpen={ticketToDelete !== null}
         onClose={() => setTicketToDelete(null)}
         onConfirm={executeDelete}
-        title="Delete Request?"
-        message="Are you sure you want to delete this ticket? This action cannot be undone."
-        confirmText="Delete"
         loading={deleting}
+        title="Delete Request"
+        message="Are you sure you want to delete this request? This action cannot be undone."
+        confirmText="Delete"
       />
-    </div>
+    </main>
   );
 }
