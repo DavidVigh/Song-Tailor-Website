@@ -1,18 +1,8 @@
 "use client";
 import { Droppable, Draggable } from "@hello-pangea/dnd";
+import { motion, AnimatePresence } from "framer-motion";
 import AdminTicketCard from "./AdminTicketCard";
 import AdminTicketRow from "./AdminTicketRow";
-import { Ticket } from "@/app/types";
-
-interface AdminColumnProps {
-  col: { id: string; title: string; border: string };
-  tickets: Ticket[];
-  isCollapsed: boolean;
-  toggleCollapse: () => void;
-  viewMode: "grid" | "compact" | "categorized";
-  advanceStatus: (ticket: Ticket) => void;
-  confirmDelete: (id: number) => void;
-}
 
 export default function AdminColumn({
   col,
@@ -22,75 +12,105 @@ export default function AdminColumn({
   viewMode,
   advanceStatus,
   confirmDelete,
-}: AdminColumnProps) {
-  const useCompact = viewMode === "compact";
-
+}: any) {
   return (
-    <div
-      className={`rounded-3xl border border-t-4 border-gray-200 dark:border-white/5 bg-white/80 dark:bg-[#0f0f0f] p-3 ${col.border}`}
+    <motion.div
+      // 🚨 NO CSS TRANSITION CLASSES HERE. Framer Motion handles everything.
+      initial={false}
+      animate={{
+        height: isCollapsed ? 64 : "auto",
+      }}
+      transition={{
+        duration: 0.4,
+        ease: [0.4, 0, 0.2, 1],
+      }}
+      className="flex flex-col justify-start rounded-[2.5rem] bg-[#0f0f0f]/60 border border-white/5 shadow-2xl overflow-hidden w-full"
     >
-      <div className="flex items-center justify-between gap-2 mb-3">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center justify-center w-2.5 h-2.5 rounded-full bg-gray-400" />
-          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-700 dark:text-gray-200">
-            {col.title}
-          </h3>
-          <span className="text-[10px] font-bold text-gray-400">
-            {tickets.length}
-          </span>
+      {/* 🟢 HEADER: Locked at 64px. shrink-0 keeps it from moving. */}
+      <div className="h-[64px] min-h-[64px] w-full px-6 flex items-center justify-between shrink-0 bg-[#0a0a0a]/40 border-b border-white/5 z-20">
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.6)]" />
+          <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-white">
+            {col.title}{" "}
+            <span className="ml-2 text-white/20 font-bold">
+              {tickets.length}
+            </span>
+          </h2>
         </div>
+
         <button
-          onClick={toggleCollapse}
-          className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleCollapse();
+          }}
+          className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 hover:text-blue-500 transition-colors px-3 py-2"
         >
           {isCollapsed ? "Show" : "Hide"}
         </button>
       </div>
 
-      <Droppable droppableId={col.id}>
-        {(provided, snapshot) => (
-          <div
-            ref={provided.innerRef}
-            {...provided.droppableProps}
-            className={`flex flex-col gap-3 min-h-20 rounded-2xl p-2 transition-colors ${snapshot.isDraggingOver ? "bg-blue-500/5" : "bg-transparent"}`}
+      {/* 🎭 CONTENT AREA: Fades out as the parent container rolls up */}
+      <AnimatePresence>
+        {!isCollapsed && (
+          <motion.div
+            key="column-content"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="w-full"
           >
-            {!isCollapsed &&
-              tickets.map((ticket, index) => (
-                <Draggable
-                  key={ticket.id}
-                  draggableId={ticket.id.toString()}
-                  index={index}
-                >
-                  {(dragProvided) => (
-                    <div
-                      ref={dragProvided.innerRef}
-                      {...dragProvided.draggableProps}
-                      {...dragProvided.dragHandleProps}
-                      className="rounded-2xl"
-                    >
-                      {useCompact ? (
-                        <AdminTicketRow
-                          ticket={ticket}
-                          colId={col.id}
-                          advanceStatus={advanceStatus}
-                          confirmDelete={confirmDelete}
-                        />
-                      ) : (
-                        <AdminTicketCard
-                          ticket={ticket}
-                          colId={col.id}
-                          advanceStatus={advanceStatus}
-                          confirmDelete={confirmDelete}
-                        />
-                      )}
-                    </div>
-                  )}
-                </Draggable>
-              ))}
-            {provided.placeholder}
-          </div>
+            <div className="p-4 pt-4 w-full">
+              <Droppable droppableId={col.id}>
+                {(provided) => (
+                  <div
+                    {...provided.droppableProps}
+                    ref={provided.innerRef}
+                    // Maintains the gap-y-12 for the grid view
+                    className={`flex flex-col ${
+                      viewMode === "grid" ? "gap-y-12" : "gap-y-3"
+                    }`}
+                  >
+                    {tickets.map((ticket: any, index: number) => (
+                      <Draggable
+                        key={ticket.id}
+                        draggableId={ticket.id.toString()}
+                        index={index}
+                      >
+                        {(provided) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            className="w-full"
+                          >
+                            {viewMode === "grid" ? (
+                              <AdminTicketCard
+                                ticket={ticket}
+                                colId={col.id}
+                                advanceStatus={advanceStatus}
+                                confirmDelete={confirmDelete}
+                              />
+                            ) : (
+                              <AdminTicketRow
+                                ticket={ticket}
+                                colId={col.id}
+                                advanceStatus={advanceStatus}
+                                confirmDelete={confirmDelete}
+                              />
+                            )}
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </div>
+          </motion.div>
         )}
-      </Droppable>
-    </div>
+      </AnimatePresence>
+    </motion.div>
   );
 }
