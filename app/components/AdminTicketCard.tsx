@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getYouTubeThumbnail, timeAgo } from "@/app/lib/utils";
 import { Ticket } from "@/app/types";
@@ -45,6 +45,33 @@ export default function AdminTicketCard({
 }: AdminTicketCardProps) {
   const router = useRouter();
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  // 🟢 Gemini Logic States
+  const [summary, setSummary] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    async function getSummary() {
+      if (!ticket.description) return;
+
+      setIsLoading(true);
+      try {
+        const res = await fetch("/api/summarize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ description: ticket.description }),
+        });
+        const data = await res.json();
+        setSummary(data.summary);
+      } catch (err) {
+        setSummary("Failed to generate AI summary.");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    getSummary();
+  }, [ticket.description]);
 
   const trackUrls = ticket.tracks?.map((t: any) => t.url).filter(Boolean) || [];
   const rawThumbnails = getYouTubeThumbnail(trackUrls);
@@ -100,7 +127,6 @@ export default function AdminTicketCard({
       <div className="absolute inset-0 z-1 bg-linear-to-b from-white/60 via-white/90 to-white dark:from-black/10 dark:via-black/60 dark:to-[#111111] pointer-events-none" />
 
       <div className="relative z-10 flex flex-col h-full">
-        {/* MEDIA THUMBNAIL */}
         <div
           onClick={(e) => {
             e.stopPropagation();
@@ -122,10 +148,8 @@ export default function AdminTicketCard({
           )}
         </div>
 
-        {/* CONTENT STACK */}
         <div className="flex-1 flex flex-col justify-between">
           <div className="space-y-4">
-            {/* BADGES */}
             <div className="flex items-center flex-nowrap gap-1 overflow-hidden">
               <span
                 className={`whitespace-nowrap shrink-0 text-[7px] font-black uppercase px-1.5 py-0.5 rounded-full border tracking-widest ${ticket.genre === "rnr" ? "border-orange-500/30 text-orange-500 bg-orange-500/5" : "border-purple-500/30 text-purple-500 bg-purple-500/5"}`}
@@ -149,7 +173,6 @@ export default function AdminTicketCard({
               )}
             </div>
 
-            {/* IDENTITY ROW */}
             <div className="space-y-3 px-1">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -176,14 +199,9 @@ export default function AdminTicketCard({
                         #{ticket.id}
                       </span>
                     </div>
-
                     <div className="flex items-center gap-2 text-[7px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-tight">
                       <span className="flex items-center gap-0.5 opacity-80">
-                        <FaPlusCircle
-                          size={6}
-                          className="text-gray-400 dark:text-gray-600"
-                        />{" "}
-                        {timeAgo(ticket.created_at)}
+                        <FaPlusCircle size={6} /> {timeAgo(ticket.created_at)}
                       </span>
                       <span className="flex items-center gap-0.5 text-blue-500 dark:text-blue-400/60">
                         <FaPen size={6} />{" "}
@@ -209,32 +227,39 @@ export default function AdminTicketCard({
                 </div>
               </div>
 
-              {/* TITLE & AI SUMMARY BOX */}
               <div className="space-y-1.5">
                 <h3 className="text-base font-black text-gray-900 dark:text-white uppercase tracking-tight truncate leading-tight">
                   {ticket.title || "Untitled Project"}
                 </h3>
 
-                {/* 🟢 FIXED HEIGHT AI SUMMARY: Instantly renders the space */}
-                <div className="h-[88px] py-2 px-3 bg-gray-50/50 dark:bg-white/5 rounded-xl border border-gray-100 dark:border-white/5 w-full">
+                {/* 🤖 FIXED HEIGHT AI SUMMARY */}
+                <div className="h-[88px] py-2 px-3 bg-gray-50/50 dark:bg-white/5 rounded-xl border border-gray-100 dark:border-white/5 w-full overflow-hidden">
                   <div className="flex items-center gap-1.5 mb-1 opacity-40">
-                    <div className="w-1 h-1 rounded-full bg-blue-500 animate-pulse" />
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 dark:text-white">
-                      AI Summary
+                    <div
+                      className={`w-1 h-1 rounded-full bg-blue-500 ${isLoading ? "animate-pulse" : ""}`}
+                    />
+                    <span className="text-[6px] font-black uppercase tracking-[0.2em] text-gray-500 dark:text-white">
+                      {isLoading ? "GEMINI SUMMARIZING..." : "AI SUMMARY"}
                     </span>
                   </div>
-                  <p className="text-[9px] font-medium leading-relaxed text-gray-600 dark:text-gray-400 line-clamp-3 italic">
-                    {ticket.description
-                      ? "Summarized description would appear here..."
-                      : "No description given."}
-                  </p>
+
+                  {isLoading ? (
+                    <div className="space-y-1.5 animate-pulse">
+                      <div className="h-2 w-full bg-gray-200 dark:bg-white/10 rounded" />
+                      <div className="h-2 w-5/6 bg-gray-200 dark:bg-white/10 rounded" />
+                      <div className="h-2 w-4/6 bg-gray-200 dark:bg-white/10 rounded" />
+                    </div>
+                  ) : (
+                    <p className="text-[9px] font-medium leading-relaxed text-gray-600 dark:text-gray-400 line-clamp-3 italic">
+                      {ticket.description ? summary : "No description given."}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
           </div>
 
           <div className="space-y-3 mt-4">
-            {/* STATS */}
             <div className="flex items-center justify-between pt-2.5 border-t border-gray-100 dark:border-white/5">
               <div className="flex gap-3">
                 <p className="text-[8px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -259,7 +284,6 @@ export default function AdminTicketCard({
               </button>
             </div>
 
-            {/* INVESTMENT */}
             <div className="bg-white border border-gray-200/70 dark:bg-white/5 dark:border-white/5 rounded-xl px-3 py-2 flex items-center justify-between">
               <span className="text-[7px] font-black text-gray-600 dark:text-gray-500 uppercase tracking-widest">
                 Total Investment
@@ -272,7 +296,6 @@ export default function AdminTicketCard({
               </div>
             </div>
 
-            {/* ACTION BUTTON */}
             <div>
               {colId === "done" ? (
                 <div className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl bg-green-500/10 border border-green-500/20 text-green-500 font-black uppercase text-[8px] tracking-widest cursor-default">
