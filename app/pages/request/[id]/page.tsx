@@ -27,7 +27,6 @@ import { getYouTubeThumbnail, timeAgo } from "@/app/lib/utils";
 import { useToast } from "@/app/context/ToastContext";
 import { Ticket } from "@/app/types";
 import ConfirmationModal from "@/app/components/ConfirmationModal";
-import Link from "next/link";
 import LoadingLayout from "@/app/layouts/LoadingLayout";
 
 const fadeInUp: Variants = {
@@ -77,14 +76,12 @@ export default function RequestDetailPage() {
   const [times, setTimes] = useState({ created: "", updated: "" });
   const [hoveredReset, setHoveredReset] = useState(false);
 
-  const links = ticket
-    ? ticket.tracks?.map((t) => t.url).filter(Boolean) || []
-    : [];
+  const links = ticket?.tracks?.map((t) => t.url).filter(Boolean) || [];
   const rawThumbnails = getYouTubeThumbnail(links);
   let thumbnails = (
     Array.isArray(rawThumbnails) ? rawThumbnails : [rawThumbnails]
   )
-    .filter((url): url is string => url !== null && url !== undefined)
+    .filter((url): url is string => !!url)
     .map((url) => url.replace("hqdefault", "maxresdefault"));
 
   const totalSlides = thumbnails.length;
@@ -98,6 +95,8 @@ export default function RequestDetailPage() {
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
 
+  const isClassMusic = ticket?.service_name?.toLowerCase() === "class music";
+
   let realActiveIndex =
     totalSlides > 1
       ? currentIndex === 0
@@ -109,7 +108,6 @@ export default function RequestDetailPage() {
   const currentLink = links[realActiveIndex] || links[0] || "#";
   const currentTitle = videoTitles[currentLink] || "Watch on YouTube";
 
-  // 🕒 1. Auto-refresh Time Ago & Realtime state
   useEffect(() => {
     if (!ticket) return;
     const updateTimes = () => {
@@ -125,7 +123,6 @@ export default function RequestDetailPage() {
     return () => clearInterval(interval);
   }, [ticket]);
 
-  // 📡 2. REALTIME DB SYNC
   useEffect(() => {
     if (!requestId) return;
     const channel = supabase
@@ -253,6 +250,37 @@ export default function RequestDetailPage() {
     }
   }
 
+  const renderBpm = () => {
+    const baseBpm = ticket?.tracks?.[0]?.base_bpm;
+    const targetBpm = formData.target_bpm;
+
+    if (isClassMusic) {
+      return (
+        <span className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">
+          {baseBpm || "?"}
+        </span>
+      );
+    }
+
+    if (baseBpm && targetBpm) {
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-black text-gray-400">{baseBpm}</span>
+          <FaLongArrowAltRight className="text-blue-500" />
+          <span className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">
+            {targetBpm}
+          </span>
+        </div>
+      );
+    }
+
+    return (
+      <span className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">
+        {targetBpm || baseBpm || "?"}
+      </span>
+    );
+  };
+
   const nextSlide = () => {
     if (totalSlides > 1 && !isTransitioning) {
       setIsTransitioning(true);
@@ -331,7 +359,6 @@ export default function RequestDetailPage() {
         icon={<FaMusic className="text-blue-500 text-2xl animate-bounce" />}
       />
     );
-
   if (!ticket)
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a] flex flex-col items-center justify-center px-6 text-center">
@@ -350,9 +377,7 @@ export default function RequestDetailPage() {
   return (
     <div className="min-h-screen w-full transition-colors duration-500 bg-gray-50 dark:bg-[#0a0a0a] overflow-x-hidden relative selection:bg-blue-500/30">
       {thumbnails.length > 0 && <MontageHeader images={thumbnails} />}
-
       <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-16">
-        {/* Header Controls */}
         <div className="flex justify-between items-center mb-6 sm:mb-8">
           <button
             onClick={() => router.back()}
@@ -370,7 +395,6 @@ export default function RequestDetailPage() {
           )}
         </div>
 
-        {/* 🎵 MAIN HERO CARD */}
         <motion.div
           initial="hidden"
           animate="visible"
@@ -453,7 +477,6 @@ export default function RequestDetailPage() {
                 </span>
               </a>
               {totalSlides > 1 && (
-                /* 🏹 STABILIZED NAVIGATION BAR: Zero-flicker Grid */
                 <div className="flex items-center justify-center gap-3 mt-2">
                   <button
                     onClick={prevSlide}
@@ -461,8 +484,6 @@ export default function RequestDetailPage() {
                   >
                     <FaChevronLeft size={10} />
                   </button>
-
-                  {/* 🟢 FIXED FOOTPRINT: Locked width prevents right-arrow flickering (cite: image_8f385b.jpg) */}
                   <div className="flex items-center justify-center w-[180px] sm:w-[240px] shrink-0 h-4 overflow-hidden">
                     <div className="flex items-center gap-2.5">
                       {thumbnails.map((_, idx) => (
@@ -474,7 +495,6 @@ export default function RequestDetailPage() {
                       ))}
                     </div>
                   </div>
-
                   <button
                     onClick={nextSlide}
                     className="hidden lg:flex items-center justify-center w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white backdrop-blur-md border border-white/10 shrink-0"
@@ -486,7 +506,6 @@ export default function RequestDetailPage() {
             </div>
 
             {isAdmin && (
-              /* Status Navigation Bar */
               <div className="grid grid-cols-[1.5fr_1.8fr_1.5fr_1.2fr] sm:grid-cols-[1fr_1fr_1fr_auto] gap-1.5 sm:gap-4 mt-8 pt-6 border-t border-white/20 items-stretch">
                 <button
                   onClick={() => updateStatus("accepted")}
@@ -502,7 +521,6 @@ export default function RequestDetailPage() {
                   />
                   <span className="whitespace-nowrap">Queue</span>
                 </button>
-
                 <button
                   onClick={() => updateStatus("in progress")}
                   className={`py-3 sm:py-6 px-1 rounded-2xl font-black text-[7px] xs:text-[8px] sm:text-[10px] uppercase tracking-widest flex flex-col items-center justify-center gap-1 sm:gap-2 transition-all border group ${ticket.status === "in progress" ? "bg-yellow-500 text-white border-yellow-400 shadow-lg" : "bg-white/5 text-white/40 border-white/10 hover:bg-white/10"}`}
@@ -513,7 +531,6 @@ export default function RequestDetailPage() {
                   />
                   <span className="whitespace-nowrap">In Progress</span>
                 </button>
-
                 <button
                   onClick={() => updateStatus("done")}
                   className={`py-3 sm:py-6 px-1 rounded-2xl font-black text-[7px] xs:text-[8px] sm:text-[10px] uppercase tracking-widest flex flex-col items-center justify-center gap-1 sm:gap-2 transition-all border ${ticket.status === "done" ? "bg-green-600 text-white border-green-400 shadow-lg" : "bg-white/5 text-white/40 border-white/10 hover:bg-white/10"}`}
@@ -526,7 +543,6 @@ export default function RequestDetailPage() {
                   />
                   <span className="whitespace-nowrap">Done</span>
                 </button>
-
                 <div className="relative flex items-center h-full min-w-0">
                   <button
                     onMouseEnter={() => setHoveredReset(true)}
@@ -561,15 +577,18 @@ export default function RequestDetailPage() {
             whileInView="visible"
             viewport={{ once: true }}
             variants={fadeInUp}
-            className="lg:col-span-2 bg-white dark:bg-[#151515] border border-gray-200 dark:border-[#252525] rounded-[1.8rem] sm:rounded-[2rem] p-6 sm:p-8 shadow-xl"
+            className={`lg:col-span-2 bg-white dark:bg-[#151515] border rounded-[1.8rem] sm:rounded-[2rem] p-6 sm:p-8 shadow-xl transition-all ${isClassMusic ? "opacity-30 grayscale pointer-events-none" : "border-gray-200 dark:border-[#252525]"}`}
           >
             <h3 className="text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
               <FaAlignLeft className="text-blue-500" /> Instructions
             </h3>
             <p className="text-sm sm:text-base text-gray-700 dark:text-gray-300 leading-relaxed font-medium whitespace-pre-wrap">
-              {ticket.description || "No specific instructions provided."}
+              {isClassMusic
+                ? "Instruction data is locked for Class Music services."
+                : ticket.description || "No specific instructions provided."}
             </p>
           </motion.div>
+
           <motion.div
             initial="hidden"
             whileInView="visible"
@@ -582,14 +601,12 @@ export default function RequestDetailPage() {
                 <FaTachometerAlt className="text-blue-500" /> Technicals
               </h3>
               <div className="space-y-4">
-                <p className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-                  {ticket.tracks?.[0]?.base_bpm || "?"}{" "}
-                  <FaLongArrowAltRight className="text-gray-400" />{" "}
-                  {formData.target_bpm || "?"}{" "}
+                <div className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
+                  {renderBpm()}
                   <span className="text-[10px] font-normal text-gray-500 uppercase tracking-widest ml-auto">
                     bpm
                   </span>
-                </p>
+                </div>
                 <p className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-3">
                   <FaCalendarAlt className="text-blue-500" />{" "}
                   {formData.deadline
@@ -601,6 +618,7 @@ export default function RequestDetailPage() {
           </motion.div>
         </div>
       </div>
+
       <ConfirmationModal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
