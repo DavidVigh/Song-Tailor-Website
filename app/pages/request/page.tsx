@@ -18,7 +18,6 @@ import {
   FaTrash,
   FaPlusCircle,
   FaPencilAlt,
-  FaHistory,
   FaCalendarAlt,
   FaExclamationCircle,
   FaCheck,
@@ -196,7 +195,6 @@ export default function NewRequestPage() {
     }
   }, [classMusicQty, isClassMusic]);
 
-  // --- CHANGED: Removed "fast" from the default upgrades list ---
   useEffect(() => {
     if (isCustomTier) setUpgrades(["sfx", "intro", "fillers"]);
   }, [isCustomTier]);
@@ -256,16 +254,23 @@ export default function NewRequestPage() {
       if (service === "Choreo Mix") total = 18000;
       if (service === "Custom Beat") total = 35000;
     }
+
+    // Add track quantity surcharges for Mixes
     if (service === "Choreo Mix") {
       if (ytLinks.length === 4) total += 2000;
       if (ytLinks.length >= 5) total += 3500;
     }
+
+    // Upgrades logic
     if (!isCustomTier) {
       if (upgrades.includes("sfx")) total += 3000;
       if (upgrades.includes("intro")) total += 2500;
       if (upgrades.includes("fillers")) total += 5000;
-      if (upgrades.includes("fast")) total += 5000;
     }
+
+    // FAST DELIVERY is always +5000 if selected, regardless of tier
+    if (upgrades.includes("fast")) total += 5000;
+
     return total;
   }, [
     genre,
@@ -500,7 +505,6 @@ export default function NewRequestPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a] pb-44">
-      {/* ... (Previous Steps UI Code remains same until Step 4) ... */}
       <div className="max-w-4xl mx-auto px-6 pt-12 sm:pt-20">
         <button
           onClick={() => (step > 1 ? setStep(step - 1) : router.back())}
@@ -811,10 +815,10 @@ export default function NewRequestPage() {
                       description="Produce 8-counts from scratch."
                     />
 
-                    {/* --- CHANGED: Enabled (disabled={false}) to allow manual selection even on Premium --- */}
+                    {/* Fast Delivery is no longer "Included" in Custom Orders */}
                     <SelectionCard
                       title="Fast Delivery"
-                      priceLabel={isCustomTier ? "Included" : "+5.000 FT"}
+                      priceLabel="+5.000 FT"
                       icon={<FaBolt />}
                       active={upgrades.includes("fast")}
                       disabled={false}
@@ -839,7 +843,6 @@ export default function NewRequestPage() {
             </motion.div>
           )}
 
-          {/* STEP 4: MEDIA & INFO */}
           {step === 4 && (
             <motion.div
               key="step4"
@@ -949,7 +952,6 @@ export default function NewRequestPage() {
                               </div>
                               <div className="flex-1 relative min-w-0">
                                 {!track.isEditing ? (
-                                  // LOCKED STATE (Button disabled if ANY other track is editing)
                                   <button
                                     disabled={isAnyEditing && !track.isEditing}
                                     onClick={() => toggleEdit(idx, true)}
@@ -976,7 +978,6 @@ export default function NewRequestPage() {
                                     </span>
                                   </button>
                                 ) : (
-                                  // EDIT MODE
                                   <div className="relative">
                                     <input
                                       type="text"
@@ -992,14 +993,12 @@ export default function NewRequestPage() {
                                       placeholder="Paste YouTube URL..."
                                       className={`w-full bg-gray-50 dark:bg-black/20 py-2.5 pl-4 pr-10 rounded-xl border outline-none font-bold text-[10px] sm:text-xs ${trackUrlError ? "border-red-500 text-red-500" : "focus:border-blue-500/30"}`}
                                     />
-                                    {/* Error Message Below Input */}
                                     {trackUrlError && (
                                       <div className="absolute top-full left-0 mt-1 text-[9px] font-bold text-red-500 flex items-center gap-1">
                                         <FaExclamationCircle size={10} />{" "}
                                         {trackUrlError}
                                       </div>
                                     )}
-                                    {/* Manual Save Icon */}
                                     <button
                                       onClick={() => toggleEdit(idx, false)}
                                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-500"
@@ -1064,7 +1063,6 @@ export default function NewRequestPage() {
                               </div>
                             </div>
                           )}
-                          {/* Locked BPM Display */}
                           {isClassMusic &&
                             !track.isEditing &&
                             (track.baseBpm || track.targetBpm) && (
@@ -1098,7 +1096,7 @@ export default function NewRequestPage() {
                   {!isClassMusic && ytLinks.length < 5 && (
                     <button
                       onClick={addYtLink}
-                      disabled={isAnyEditing} // PROTECT: Disable Add if editing
+                      disabled={isAnyEditing}
                       className={`w-full p-5 rounded-[2.5rem] border border-dashed border-gray-300 dark:border-white/10 flex items-center justify-center gap-2 font-black text-[10px] uppercase tracking-widest transition-all
                         ${isAnyEditing ? "text-gray-600 dark:text-gray-600 cursor-not-allowed opacity-50 pointer-events-none" : "text-gray-400 hover:text-blue-500"}`}
                     >
